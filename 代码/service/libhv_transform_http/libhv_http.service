@@ -1,0 +1,15 @@
+[Unit]
+Description=libhv_http
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+ExecStart=/root/service/libhv_transform_http/startup.sh start
+ExecStop=/root/service/libhv_transform_http/startup.sh stop
+PrivateTmp=true
+LimitNOFILE=655360
+LimitNPROC=655360
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+*.sdf
+*.ipch
+*.suo
+Release/
+Debug/
+log/
+*.pem
+*.bmp
+*.yaml
+*.opensdf
+.idea/
+target/
+web/
+测试/
+发布/*/

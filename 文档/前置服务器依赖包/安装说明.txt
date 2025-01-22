@@ -1,0 +1,20 @@
+yum install mysql mysql-server -y
+yum install mysql-lib mysql-devel -y
+yum install git vim -y
+yum install libcurl libcurl-devel -y
+
+git clone https://gitee.com/libhv/libhv.git
+./configure
+make && make install
+
+tar -zxf libzdb-3.2.2.tar.gz
+cd libzdb-3.2.2
+./configure --prefix=/usr
+make && make install
+ldconfig
+
+unzip log4cplus-1.2.1.zip
+chmod +x configure
+./configure
+make && make install
+ldconfig

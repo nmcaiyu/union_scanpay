@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PosDemo", "PosDemo\PosDemo.vcxproj", "{8481C01B-B577-4A09-9D48-4424675B56D0}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ScanDemo", "ScanDemo\ScanDemo.vcxproj", "{74286C73-2653-407D-8A19-B213DCE48C82}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8481C01B-B577-4A09-9D48-4424675B56D0}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8481C01B-B577-4A09-9D48-4424675B56D0}.Debug|Win32.Build.0 = Debug|Win32
+		{8481C01B-B577-4A09-9D48-4424675B56D0}.Release|Win32.ActiveCfg = Release|Win32
+		{8481C01B-B577-4A09-9D48-4424675B56D0}.Release|Win32.Build.0 = Release|Win32
+		{74286C73-2653-407D-8A19-B213DCE48C82}.Debug|Win32.ActiveCfg = Debug|Win32
+		{74286C73-2653-407D-8A19-B213DCE48C82}.Debug|Win32.Build.0 = Debug|Win32
+		{74286C73-2653-407D-8A19-B213DCE48C82}.Release|Win32.ActiveCfg = Release|Win32
+		{74286C73-2653-407D-8A19-B213DCE48C82}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

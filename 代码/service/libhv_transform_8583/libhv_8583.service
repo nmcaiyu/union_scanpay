@@ -1,0 +1,15 @@
+[Unit]
+Description=libhv_8583
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+ExecStart=/root/service/libhv_transform_8583/startup.sh start
+ExecStop=/root/service/libhv_transform_8583/startup.sh stop
+PrivateTmp=true
+LimitNOFILE=655360
+LimitNPROC=655360
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

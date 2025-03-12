@@ -81,6 +81,13 @@ typedef struct
 	int iScanTimeout;
 	int iScanType;
 	char szScanKey[1024 + 1];
+
+	char szAGETID[100 + 1];
+	char szAPPCONFIGID[100 + 1];
+	char szCUSTID[100 + 1];
+	char szTRADINGIP[100 + 1];
+	char szPUBLICKEY[1024 + 1];
+
 	// 银行卡
 	char szCOM[20 + 1];
 	int iBPS;
@@ -127,6 +134,11 @@ void InitConfig()
 	config.iScanType = GetPrivateProfileInt("SCAN", "TYPE", 1, config.szConfigPath);
 	GetPrivateProfileString("SCAN", "DEVICE", "", config.szDevice, sizeof(config.szDevice), config.szConfigPath);
 
+	GetPrivateProfileString("SCAN", "AGETID", "", config.szAGETID, sizeof(config.szAGETID), config.szConfigPath);
+	GetPrivateProfileString("SCAN", "APPCONFIGID", "", config.szAPPCONFIGID, sizeof(config.szAPPCONFIGID), config.szConfigPath);
+	GetPrivateProfileString("SCAN", "CUSTID", "", config.szCUSTID, sizeof(config.szCUSTID), config.szConfigPath);
+	GetPrivateProfileString("SCAN", "TRADINGIP", "", config.szTRADINGIP, sizeof(config.szTRADINGIP), config.szConfigPath);
+	GetPrivateProfileString("SCAN", "PUBLICKEY", "", config.szPUBLICKEY, sizeof(config.szPUBLICKEY), config.szConfigPath);
 
 	// 银行卡
 	GetPrivateProfileString("POS", "NAME", "", config.szCOM, sizeof(config.szCOM), config.szConfigPath);
@@ -528,6 +540,42 @@ string trade_micropay_getmsg(trade_micropay_response res)
 	}
 }
 
+string trade_micropay_getmsg_gt(gt_trade_micropay_response res)
+{
+	if (res.msg.length() > 0)
+	{
+		return res.msg;
+	}
+	else
+	{
+		return "未知返回信息";
+	}
+}
+
+string trade_query_getmsg_gt(gt_trade_query_response res)
+{
+	if (res.msg.length() > 0)
+	{
+		return res.msg;
+	}
+	else
+	{
+		return "未知返回信息";
+	}
+}
+
+string gt_trade_close_getmsg(gt_trade_close_response res)
+{
+	if (res.msg.length() > 0)
+	{
+		return res.msg;
+	}
+	else
+	{
+		return "未知返回信息";
+	}
+}
+
 void trade_micropay(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
 {
 	CString cstrData, cstrErrMsg, cstrNeedQuery;
@@ -567,7 +615,7 @@ void trade_micropay(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
 	
 	BUFCLR(szSendBuf);
 	BUFCLR(szRecvBuf);
-	strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
+	// strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
 	cstrData = Tools::GBKToUTF8(strData.c_str());
 	szSendBuf[0] = cstrData.GetLength() / 256;
 	szSendBuf[1] = cstrData.GetLength() % 256;
@@ -906,6 +954,18 @@ string trade_refund_getmsg(trade_refund_response res)
 	else if (res.message.length() > 0)
 	{
 		return res.message;
+	}
+	else
+	{
+		return "未知返回信息";
+	}
+}
+
+string trade_refund_getmsg_gt(gt_trade_refund_response res)
+{
+	if (res.msg.length() > 0)
+	{
+		return res.msg;
 	}
 	else
 	{
@@ -1888,10 +1948,697 @@ void trade_reverse_wft(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
 cleanUP:
 	return;
 }
+
+// 将 detail_item 转换为 JSON 字符串
+std::string generateDetailJson(const detail_item& detail) {
+	// 使用 xpack::json 将 detail_item 结构体序列化为 JSON 字符串
+	return xpack::json::encode(detail);
+}
+
+// 工具函数：生成 SHA256 哈希
+std::string generateSHA256(const std::string& data) {
+	unsigned char hash[SHA256_DIGEST_LENGTH];
+	SHA256_CTX sha256;
+	SHA256_Init(&sha256);
+	SHA256_Update(&sha256, data.c_str(), data.size());
+	SHA256_Final(hash, &sha256);
+
+	std::ostringstream hexStream;
+	for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+		hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+	}
+
+	return hexStream.str();
+}
+
+// 工具函数：Base64 编码
+std::string base64_encode(const unsigned char* input, int length) {
+	BIO *bio, *b64;
+	BUF_MEM *bufferPtr;
+
+	b64 = BIO_new(BIO_f_base64());
+	bio = BIO_new(BIO_s_mem());
+	bio = BIO_push(b64, bio);
+
+	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+	BIO_write(bio, input, length);
+	BIO_flush(bio);
+	BIO_get_mem_ptr(bio, &bufferPtr);
+	BIO_set_close(bio, BIO_NOCLOSE);
+
+	std::string result(bufferPtr->data, bufferPtr->length);
+	BIO_free_all(bio);
+
+	return result;
+}
+
+// 工具函数：加载公钥
+RSA* load_public_key(const std::string& public_key_base64) {
+	// 1. 拼接完整的 PEM 格式公钥
+	std::string public_key_pem = "-----BEGIN PUBLIC KEY-----\n";
+	public_key_pem += public_key_base64;  // 这里假设 public_key_base64 是裸的 Base64 字符串
+	public_key_pem += "\n-----END PUBLIC KEY-----";
+
+	// 2. 从内存加载 PEM 公钥
+	BIO *bio = BIO_new_mem_buf(public_key_pem.c_str(), public_key_pem.size());
+	if (!bio) {
+		LOG_ERROR("Failed to create BIO for public key.");
+		return nullptr;
+	}
+
+	// 3. 使用 PEM_read_bio_RSA_PUBKEY 读取公钥
+	RSA* rsa = PEM_read_bio_RSA_PUBKEY(bio, NULL, NULL, NULL);
+	if (!rsa) {
+		char err_buf[256];
+		ERR_error_string_n(ERR_get_error(), err_buf, sizeof(err_buf));
+		LOG_ERROR("OpenSSL error: %s", err_buf);
+		BIO_free(bio);
+		return nullptr;
+	}
+
+	BIO_free(bio);
+	return rsa;
+}
+
+// 工具函数：使用公钥加密数据
+std::string encryptWithRSA(const std::string& publicKey, const std::string& data) {
+	RSA* rsa = load_public_key(publicKey);
+	int rsa_size = RSA_size(rsa);
+	std::vector<unsigned char> encrypted(rsa_size);
+
+	int result = RSA_public_encrypt(data.size(), (unsigned char*)data.c_str(), encrypted.data(), rsa, RSA_PKCS1_PADDING);
+	RSA_free(rsa);
+
+	if (result == -1) {
+		throw std::runtime_error("RSA encryption failed: " + std::string(ERR_error_string(ERR_get_error(), nullptr)));
+	}
+
+	return base64_encode(encrypted.data(), result);
+}
+
+// 生成拼接字符串的方法
+std::string generateSignatureString(const gt_trade_micropay_request& request) {
+	std::map<std::string, std::string> sortedParams;
+
+	// 添加普通字段到 map
+	if (!request.agetId.empty()) sortedParams["agetId"] = request.agetId;
+	if (!request.appConfigId.empty()) sortedParams["appConfigId"] = request.appConfigId;
+	if (!request.custId.empty()) sortedParams["custId"] = request.custId;
+	if (!request.orderNo.empty()) sortedParams["orderNo"] = request.orderNo;
+	if (!request.txamt.empty()) sortedParams["txamt"] = request.txamt;
+	if (!request.code.empty()) sortedParams["code"] = request.code;
+	if (!request.tradingIp.empty()) sortedParams["tradingIp"] = request.tradingIp;
+	if (!request.type.empty()) sortedParams["type"] = request.type;
+	if (!request.timeStamp.empty()) sortedParams["timeStamp"] = request.timeStamp;
+	if (!request.version.empty()) sortedParams["version"] = request.version;
+
+	// 处理 detail 为 JSON 字符串
+	if (!request.detail.goods_detail.empty()) {
+		sortedParams["detail"] = generateDetailJson(request.detail);
+	}
+
+	// 拼接成 key=value&key=value 格式
+	std::ostringstream oss;
+	for (auto it = sortedParams.begin(); it != sortedParams.end(); ++it) {
+		if (it != sortedParams.begin()) {
+			oss << "&";
+		}
+		oss << it->first << "=" << it->second;
+	}
+
+	return oss.str();
+}
+
+// 生成签名的方法
+void makeSign_gt(gt_trade_micropay_request& request, const std::string& publicKey) {
+	try {
+		// 生成拼接字符串
+		std::string signatureString = generateSignatureString(request);
+
+		LOG_INFO("signatureString: %s", signatureString.c_str());
+
+		// 生成 SHA256 哈希
+		std::string sha256Str = generateSHA256(signatureString);
+
+		// 使用公钥对 SHA256 哈希进行加密（签名）
+		std::string rsaSignature = encryptWithRSA(publicKey, sha256Str);
+
+		// 将签名赋值到 sign 字段
+		request.sign = rsaSignature;
+
+		// 打印签名
+		LOG_INFO("rsaSignature: %s", rsaSignature.c_str());
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR("Failed to generate signature: %s", e.what());
+		throw;  // 重新抛出异常，由调用者处理
+	}
+}
+
+// 生成拼接字符串的方法
+std::string generateSignatureStringQuery(const gt_trade_query_request& request) {
+	std::map<std::string, std::string> sortedParams;
+
+	// 添加普通字段到 map
+	if (!request.agetId.empty()) sortedParams["agetId"] = request.agetId;
+	if (!request.appConfigId.empty()) sortedParams["appConfigId"] = request.appConfigId;
+	if (!request.custId.empty()) sortedParams["custId"] = request.custId;
+	if (!request.orderNo.empty()) sortedParams["orderNo"] = request.orderNo;
+	if (!request.orderTime.empty()) sortedParams["orderTime"] = request.orderTime;
+	if (!request.timeStamp.empty()) sortedParams["timeStamp"] = request.timeStamp;
+	if (!request.version.empty()) sortedParams["version"] = request.version;
+
+	// 拼接成 key=value&key=value 格式
+	std::ostringstream oss;
+	for (auto it = sortedParams.begin(); it != sortedParams.end(); ++it) {
+		if (it != sortedParams.begin()) {
+			oss << "&";
+		}
+		oss << it->first << "=" << it->second;
+	}
+
+	return oss.str();
+}
+
+// 生成拼接字符串的方法
+std::string generateSignatureStringRefund(const gt_trade_refund_request& request) {
+	std::map<std::string, std::string> sortedParams;
+
+	// 添加普通字段到 map
+	if (!request.agetId.empty()) sortedParams["agetId"] = request.agetId;
+	if (!request.appConfigId.empty()) sortedParams["appConfigId"] = request.appConfigId;
+	if (!request.custId.empty()) sortedParams["custId"] = request.custId;
+	if (!request.orderNo.empty()) sortedParams["orderNo"] = request.orderNo;
+	if (!request.refundAmount.empty()) sortedParams["refundAmount"] = request.refundAmount;
+	if (!request.timeStamp.empty()) sortedParams["timeStamp"] = request.timeStamp;
+	if (!request.version.empty()) sortedParams["version"] = request.version;
+
+	// 拼接成 key=value&key=value 格式
+	std::ostringstream oss;
+	for (auto it = sortedParams.begin(); it != sortedParams.end(); ++it) {
+		if (it != sortedParams.begin()) {
+			oss << "&";
+		}
+		oss << it->first << "=" << it->second;
+	}
+
+	return oss.str();
+}
+
+// 生成拼接字符串的方法
+std::string generateSignatureStringClose(const gt_trade_close_request& request) {
+	std::map<std::string, std::string> sortedParams;
+
+	// 添加普通字段到 map
+	if (!request.agetId.empty()) sortedParams["agetId"] = request.agetId;
+	if (!request.appConfigId.empty()) sortedParams["appConfigId"] = request.appConfigId;
+	if (!request.custId.empty()) sortedParams["custId"] = request.custId;
+	if (!request.threeOrderNO.empty()) sortedParams["threeOrderNO"] = request.threeOrderNO;
+	if (!request.timeStamp.empty()) sortedParams["timeStamp"] = request.timeStamp;
+	if (!request.version.empty()) sortedParams["version"] = request.version;
+
+	// 拼接成 key=value&key=value 格式
+	std::ostringstream oss;
+	for (auto it = sortedParams.begin(); it != sortedParams.end(); ++it) {
+		if (it != sortedParams.begin()) {
+			oss << "&";
+		}
+		oss << it->first << "=" << it->second;
+	}
+
+	return oss.str();
+}
+
+// 生成签名的方法
+void makeSign_gt_query(gt_trade_query_request& request, const std::string& publicKey) {
+	try {
+		// 生成拼接字符串
+		std::string signatureString = generateSignatureStringQuery(request);
+
+		LOG_INFO("signatureString: %s", signatureString.c_str());
+
+		// 生成 SHA256 哈希
+		std::string sha256Str = generateSHA256(signatureString);
+
+		// 使用公钥对 SHA256 哈希进行加密（签名）
+		std::string rsaSignature = encryptWithRSA(publicKey, sha256Str);
+
+		// 将签名赋值到 sign 字段
+		request.sign = rsaSignature;
+
+		// 打印签名
+		LOG_INFO("rsaSignature: %s", rsaSignature.c_str());
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR("Failed to generate signature: %s", e.what());
+		throw;  // 重新抛出异常，由调用者处理
+	}
+}
+
+// 生成签名的方法
+void makeSign_gt_refund(gt_trade_refund_request& request, const std::string& publicKey) {
+	try {
+		// 生成拼接字符串
+		std::string signatureString = generateSignatureStringRefund(request);
+
+		LOG_INFO("signatureString: %s", signatureString.c_str());
+
+		// 生成 SHA256 哈希
+		std::string sha256Str = generateSHA256(signatureString);
+
+		// 使用公钥对 SHA256 哈希进行加密（签名）
+		std::string rsaSignature = encryptWithRSA(publicKey, sha256Str);
+
+		// 将签名赋值到 sign 字段
+		request.sign = rsaSignature;
+
+		// 打印签名
+		LOG_INFO("rsaSignature: %s", rsaSignature.c_str());
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR("Failed to generate signature: %s", e.what());
+		throw;  // 重新抛出异常，由调用者处理
+	}
+}
+
+// 生成签名的方法
+void makeSign_gt_close(gt_trade_close_request& request, const std::string& publicKey) {
+	try {
+		// 生成拼接字符串
+		std::string signatureString = generateSignatureStringClose(request);
+
+		LOG_INFO("signatureString: %s", signatureString.c_str());
+
+		// 生成 SHA256 哈希
+		std::string sha256Str = generateSHA256(signatureString);
+
+		// 使用公钥对 SHA256 哈希进行加密（签名）
+		std::string rsaSignature = encryptWithRSA(publicKey, sha256Str);
+
+		// 将签名赋值到 sign 字段
+		request.sign = rsaSignature;
+
+		// 打印签名
+		LOG_INFO("rsaSignature: %s", rsaSignature.c_str());
+	}
+	catch (const std::exception& e) {
+		LOG_ERROR("Failed to generate signature: %s", e.what());
+		throw;  // 重新抛出异常，由调用者处理
+	}
+}
+
+// start	[2025/1/22]
+// 国通渠道
+void trade_micropay_gt(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
+{
+	CString cstrData, cstrErrMsg, cstrNeedQuery;
+	int fdSocket = 0;
+	char szDateTime[30 + 1];
+	BUFCLR(szDateTime);
+	gt_trade_micropay_request request;
+	gt_trade_micropay_response response;
+	unsigned char szSendBuf[SOCKETDATELEN], szRecvBuf[SOCKETDATELEN];
+	string strData;
+	int iRecvLen;
+	Tools::GetDateTime(szDateTime);
+
+	request.agetId = config.szAGETID;
+	request.appConfigId = config.szAPPCONFIGID;
+	request.custId = config.szCUSTID;
+	request.orderNo = req.outTradeNo;
+	request.txamt = req.amt;
+	request.code = req.authCode;
+	request.tradingIp = config.szTRADINGIP;
+	request.type = "P";
+	request.timeStamp = szDateTime;
+	request.version = "1.0.0";
+
+	goods_detail_item detailItem;
+	detailItem.goods_id = req.outTransactionId;
+	detailItem.goods_name = req.body;
+	detailItem.quantity = 1;
+	detailItem.price = std::stof(req.amt);
+	request.detail.goods_detail.push_back(detailItem);
+
+	makeSign_gt(request, config.szPUBLICKEY);
+
+	request.service = SCAN_PAY;
+	request.channel = "GT";
+
+	strData = xpack::json::encode(request);
+	LOG_INFO("Request [%s]", strData.c_str());
+
+	BUFCLR(szSendBuf);
+	BUFCLR(szRecvBuf);
+	//strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
+	cstrData = Tools::GBKToUTF8(strData.c_str());
+	szSendBuf[0] = cstrData.GetLength() / 256;
+	szSendBuf[1] = cstrData.GetLength() % 256;
+	strcpy((char *)szSendBuf + 2, cstrData.GetBuffer(0));
+	LOG_INFO("发送报文 [%s]", strData.c_str());
+
+	if (SendRecvSocket(szSendBuf, cstrData.GetLength() + 2, szRecvBuf, &iRecvLen, cstrErrMsg, cstrNeedQuery) != 0)
+	{
+		res.respCode = "XX";
+		res.respMsg = cstrErrMsg.GetBuffer(0);
+		res.needQuery = cstrNeedQuery.GetBuffer(0);
+		goto cleanUP;
+	}
+
+	try
+	{
+		BUFCLR(szSendBuf);
+		Tools::DeleteCDATA((char *)szSendBuf, (char *)szRecvBuf + 2);
+		cstrData = Tools::UTF8ToGBK((char *)szSendBuf);
+		LOG_INFO("后台返回字符串 [%s]", cstrData.GetBuffer(0));
+		xpack::json::decode(cstrData.GetBuffer(0), response);
+	}
+	catch (exception &e)
+	{
+		LOG_ERROR("解析返回XML失败 %s", e.what());
+		res.respCode = "XX";
+		res.respMsg = "解析返回XML失败";
+		res.needQuery = "Y";
+		goto cleanUP;
+	}
+
+	if (response.code.compare("222222") == 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "Y";
+		res.respMsg = trade_micropay_getmsg_gt(response);
+		goto cleanUP;
+	}
+	else if (response.code.compare("000000") != 0 && response.code.compare("222222") != 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "Y";
+		res.respMsg = trade_micropay_getmsg_gt(response);
+		goto cleanUP;
+	}
+	else
+	{
+		res.respCode = "00";
+		res.needQuery = "N";
+		res.outTradeNo = response.data.threeOrderNo;
+		res.transactionId = response.data.torderNo;
+		res.outTransactionId = response.data.threeOrderNo;
+		res.dateTime = response.data.orderTime;
+		res.amt = response.data.txamt;
+		goto cleanUP;
+	}
+
+
+
+cleanUP:
+	if (res.outTradeNo.length() == 0)
+	{
+		res.outTradeNo = req.outTradeNo;
+	}
+}
+
+void trade_query_gt(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
+{
+	CString cstrData, cstrErrMsg, cstrNeedQuery;
+	int fdSocket = 0;
+	char szDate[30 + 1];
+	BUFCLR(szDate);
+	char szDateTime[30 + 1];
+	BUFCLR(szDateTime);
+	gt_trade_query_request request;
+	gt_trade_query_response response;
+	unsigned char szSendBuf[SOCKETDATELEN], szRecvBuf[SOCKETDATELEN];
+	string strData;
+	int iRecvLen;
+
+	Tools::GetDate(szDate);
+	Tools::GetDateTime(szDateTime);
+
+	request.orderNo = req.outTradeNo;
+	request.agetId = config.szAGETID;
+	request.appConfigId = config.szAPPCONFIGID;
+	request.custId = config.szCUSTID;
+	request.orderTime = szDate;
+	request.timeStamp = szDateTime;
+	request.version = "1.0.0";
+
+	makeSign_gt_query(request, config.szPUBLICKEY);
+
+	request.service = SCAN_PAYQUERY;
+	request.channel = "GT";
+
+	strData = xpack::json::encode(request);
+
+	BUFCLR(szSendBuf);
+	BUFCLR(szRecvBuf);
+	//strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
+	cstrData = Tools::GBKToUTF8(strData.c_str());
+	szSendBuf[0] = cstrData.GetLength() / 256;
+	szSendBuf[1] = cstrData.GetLength() % 256;
+	strcpy((char *)szSendBuf + 2, cstrData.GetBuffer(0));
+	LOG_INFO("发送报文 [%s]", strData.c_str());
+
+	if (SendRecvSocket(szSendBuf, cstrData.GetLength() + 2, szRecvBuf, &iRecvLen, cstrErrMsg, cstrNeedQuery) != 0)
+	{
+		res.respCode = "XX";
+		res.respMsg = cstrErrMsg.GetBuffer(0);
+		res.needQuery = cstrNeedQuery.GetBuffer(0);
+		goto cleanUP;
+	}
+
+	try
+	{
+		BUFCLR(szSendBuf);
+		Tools::DeleteCDATA((char *)szSendBuf, (char *)szRecvBuf + 2);
+		cstrData = Tools::UTF8ToGBK((char *)szSendBuf);
+		LOG_INFO("后台返回字符串 [%s]", cstrData.GetBuffer(0));
+		xpack::json::decode(cstrData.GetBuffer(0), response);
+	}
+	catch (exception &e)
+	{
+		LOG_ERROR("解析返回XML失败 %s", e.what());
+		res.respCode = "XX";
+		res.respMsg = "解析返回XML失败";
+		res.needQuery = "Y";
+		goto cleanUP;
+	}
+
+
+	if (response.code.compare("222222") == 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "Y";
+		res.respMsg = trade_query_getmsg_gt(response);
+		goto cleanUP;
+	}
+	else if (response.code.compare("000000") != 0 && response.code.compare("222222") != 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "Y";
+		res.respMsg = trade_query_getmsg_gt(response);
+		goto cleanUP;
+	}
+	else
+	{
+		res.respCode = "00";
+		res.needQuery = "N";
+		res.outTradeNo = response.data.threeOrderNo;
+		res.transactionId = response.data.torderNo;
+		res.outTransactionId = response.data.threeOrderNo;
+		res.dateTime = response.data.orderTime;
+		res.amt = response.data.txamt;
+		res.tradeType = response.data.payChannel;
+		res.bankBillNo = response.data.payNo;
+
+		goto cleanUP;
+	}
+
+cleanUP:
+	if (res.outTradeNo.length() == 0)
+	{
+		res.outTradeNo = req.outTradeNo;
+	}
+	if (res.transactionId.length() == 0)
+	{
+		res.transactionId = req.transactionId;
+	}
+	return;
+}
+
+void trade_refund_gt(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
+{
+	CString cstrData, cstrErrMsg, cstrNeedQuery;
+	int fdSocket = 0;
+	char szDateTime[30 + 1];
+	BUFCLR(szDateTime);
+	gt_trade_refund_request request;
+	gt_trade_refund_response response;
+	unsigned char szSendBuf[SOCKETDATELEN], szRecvBuf[SOCKETDATELEN];
+	string strData;
+	int iRecvLen;
+
+	Tools::GetDateTime(szDateTime);
+
+	request.orderNo = szDateTime;
+	request.oldTOrderNo = req.outTradeNo;
+	request.agetId = config.szAGETID;
+	request.appConfigId = config.szAPPCONFIGID;
+	request.custId = config.szCUSTID;
+	request.refundAmount = req.refundAmt;
+	//request.tag = "";
+	request.timeStamp = szDateTime;
+	request.version = "1.0.0";
+
+	makeSign_gt_refund(request, config.szPUBLICKEY);
+
+	request.service = SCAN_REFUND;
+	request.channel = "GT";
+
+	strData = xpack::json::encode(request);
+
+	BUFCLR(szSendBuf);
+	BUFCLR(szRecvBuf);
+	//strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
+	cstrData = Tools::GBKToUTF8(strData.c_str());
+	szSendBuf[0] = cstrData.GetLength() / 256;
+	szSendBuf[1] = cstrData.GetLength() % 256;
+	strcpy((char *)szSendBuf + 2, cstrData.GetBuffer(0));
+	LOG_INFO("发送报文 [%s]", strData.c_str());
+
+	if (SendRecvSocket(szSendBuf, cstrData.GetLength() + 2, szRecvBuf, &iRecvLen, cstrErrMsg, cstrNeedQuery) != 0)
+	{
+		res.respCode = "XX";
+		res.respMsg = cstrErrMsg.GetBuffer(0);
+		res.needQuery = cstrNeedQuery.GetBuffer(0);
+		goto cleanUP;
+	}
+
+	try
+	{
+		BUFCLR(szSendBuf);
+		Tools::DeleteCDATA((char *)szSendBuf, (char *)szRecvBuf + 2);
+		cstrData = Tools::UTF8ToGBK((char *)szSendBuf);
+		LOG_INFO("后台返回字符串 [%s]", cstrData.GetBuffer(0));
+		xpack::json::decode(cstrData.GetBuffer(0), response);
+	}
+	catch (exception &e)
+	{
+		LOG_ERROR("解析返回XML失败 %s", e.what());
+		res.respCode = "XX";
+		res.respMsg = "解析返回XML失败";
+		res.needQuery = "Y";
+		goto cleanUP;
+	}
+
+
+	if (response.code.compare("000000") != 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "N";
+		res.respMsg = trade_refund_getmsg_gt(response);
+		goto cleanUP;
+	}
+	else
+	{
+		res.respCode = "00";
+		res.needQuery = "N";
+		res.outTradeNo = response.data.threeOrderNo;
+		res.transactionId = response.data.threeOrderNo;
+		res.outRefundNo = response.data.orderFlowNo;
+		res.refundAmt = response.data.refundAmt;
+		goto cleanUP;
+	}
+
+cleanUP:
+	return;
+}
+
+void trade_close_gt(SCANTRANS_REQUEST req, SCANTRANS_RESPONSE &res)
+{
+	CString cstrData, cstrErrMsg, cstrNeedQuery;
+	int fdSocket = 0;
+	char szDateTime[30 + 1];
+	BUFCLR(szDateTime);
+	gt_trade_close_request request;
+	gt_trade_close_response response;
+	unsigned char szSendBuf[SOCKETDATELEN], szRecvBuf[SOCKETDATELEN];
+	string strData;
+	int iRecvLen;
+
+	Tools::GetDateTime(szDateTime);
+
+	request.threeOrderNO = req.outTradeNo;
+	request.agetId = config.szAGETID;
+	request.appConfigId = config.szAPPCONFIGID;
+	request.custId = config.szCUSTID;
+	request.timeStamp = szDateTime;
+	request.version = "1.0.0";
+
+	makeSign_gt_close(request, config.szPUBLICKEY);
+
+	request.service = SCAN_CLOSE;
+	request.channel = "GT";
+
+	strData = xpack::json::encode(request);
+
+	BUFCLR(szSendBuf);
+	BUFCLR(szRecvBuf);
+	//strData = xpack::xml::encode(request, "XML", 0, 2, ' ');
+	cstrData = Tools::GBKToUTF8(strData.c_str());
+	szSendBuf[0] = cstrData.GetLength() / 256;
+	szSendBuf[1] = cstrData.GetLength() % 256;
+	strcpy((char *)szSendBuf + 2, cstrData.GetBuffer(0));
+	LOG_INFO("发送报文 [%s]", strData.c_str());
+
+	if (SendRecvSocket(szSendBuf, cstrData.GetLength() + 2, szRecvBuf, &iRecvLen, cstrErrMsg, cstrNeedQuery) != 0)
+	{
+		res.respCode = "XX";
+		res.respMsg = cstrErrMsg.GetBuffer(0);
+		res.needQuery = cstrNeedQuery.GetBuffer(0);
+		goto cleanUP;
+	}
+
+	try
+	{
+		BUFCLR(szSendBuf);
+		Tools::DeleteCDATA((char *)szSendBuf, (char *)szRecvBuf + 2);
+		cstrData = Tools::UTF8ToGBK((char *)szSendBuf);
+		LOG_INFO("后台返回字符串 [%s]", cstrData.GetBuffer(0));
+		xpack::json::decode(cstrData.GetBuffer(0), response);
+	}
+	catch (exception &e)
+	{
+		LOG_ERROR("解析返回XML失败 %s", e.what());
+		res.respCode = "XX";
+		res.respMsg = "解析返回XML失败";
+		res.needQuery = "Y";
+		goto cleanUP;
+	}
+
+
+	if (response.code.compare("000000") != 0)
+	{
+		res.respCode = "EE";
+		res.needQuery = "N";
+		res.respMsg = gt_trade_close_getmsg(response);
+		goto cleanUP;
+	}
+	else
+	{
+		res.respCode = "00";
+		res.needQuery = "N";
+		res.respMsg = gt_trade_close_getmsg(response);
+		goto cleanUP;
+	}
+
+cleanUP:
+	return;
+}
+
 // end		[2023/4/4]
 void checkRequest(SCANTRANS_REQUEST req)
 {
-	if (config.iScanType != 1 && config.iScanType != 2)
+	if (config.iScanType != 1 && config.iScanType != 2 && config.iScanType != 3)
 	{
 		throw std::runtime_error("配置文件扫码渠道有误");
 	}
@@ -1931,10 +2678,10 @@ void checkRequest(SCANTRANS_REQUEST req)
 		{
 			throw std::runtime_error("商户订单号与平台订单号必须传入其中之一");
 		}
-		else if (req.outRefundNo.length() == 0)
-		{
-			throw std::runtime_error("未传入商户退货订单号");
-		}
+		//else if (req.outRefundNo.length() == 0)
+		//{
+		//	throw std::runtime_error("未传入商户退货订单号");
+		//}
 		else if (req.refundAmt.length() == 0)
 		{
 			throw std::runtime_error("未传入退货金额");
@@ -1943,10 +2690,10 @@ void checkRequest(SCANTRANS_REQUEST req)
 		{
 			throw std::runtime_error("退货金额格式有误");
 		}
-		else if (req.amt.length() == 0)
-		{
-			throw std::runtime_error("未传入金额");
-		}
+		//else if (req.amt.length() == 0)
+		//{
+		//	throw std::runtime_error("未传入金额");
+		//}
 		else if (!Tools::IsDigit2(req.amt))
 		{
 			throw std::runtime_error("金额格式有误");
@@ -2004,6 +2751,7 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 		goto cleanUP;
 	}
 
+
 	if (req.transName.compare(SCAN_PAY) == 0)
 	{
 		if (config.iScanType == 1)
@@ -2013,6 +2761,10 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 		else if (config.iScanType == 2)
 		{
 			trade_micropay_wft(req, res);
+		}
+		else if (config.iScanType == 3)
+		{
+			trade_micropay_gt(req, res);
 		}
 	}
 	else if (req.transName.compare(SCAN_PAYQUERY) == 0)
@@ -2025,6 +2777,9 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 		{
 			trade_query_wft(req, res);
 		}
+		else if (config.iScanType == 3) {
+			trade_query_gt(req, res);
+		}
 	}
 	else if (req.transName.compare(SCAN_REFUND) == 0)
 	{
@@ -2035,6 +2790,10 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 		else if (config.iScanType == 2)
 		{
 			trade_refund_wft(req, res);
+		}
+		else if (config.iScanType == 3)
+		{
+			trade_refund_gt(req, res);
 		}
 	}
 	else if (req.transName.compare(SCAN_REFUNDQUERY) == 0)
@@ -2057,9 +2816,13 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 			res.needQuery = "N";
 			goto cleanUP;
 		}
-		else
+		else if (config.iScanType == 2)
 		{
 			trade_close_wft(req, res);
+		}
+		else if (config.iScanType == 3)
+		{
+			trade_close_gt(req, res);
 		}
 	}
 	else if (req.transName.compare(SCAN_REVERSE) == 0)
@@ -2071,9 +2834,13 @@ int __stdcall ScanTrans(char *inputData, char *outputData)
 			res.needQuery = "N";
 			goto cleanUP;
 		}
-		else
+		else if (config.iScanType == 2)
 		{
 			trade_reverse_wft(req, res);
+		}
+		else if (config.iScanType == 3)
+		{
+			trade_close_gt(req, res);
 		}
 	}
 	else

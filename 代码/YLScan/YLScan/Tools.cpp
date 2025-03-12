@@ -214,6 +214,18 @@ void Tools::GetDateTime(char *szDateTime)
 	return;
 }
 
+void Tools::GetDate(char *szDateTime)
+{
+	struct tm *ptm = NULL;
+	time_t currtime;
+	memset(&currtime, 0x00, sizeof(currtime));
+	time(&currtime);
+	ptm = localtime(&currtime);
+	sprintf(szDateTime, "%04d%02d%02d",
+		ptm->tm_year + 1900, ptm->tm_mon + 1, ptm->tm_mday);
+	return;
+}
+
 HMODULE Tools::GetSelfModuleHandle()
 {
 	MEMORY_BASIC_INFORMATION mbi;

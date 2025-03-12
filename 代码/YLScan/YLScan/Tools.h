@@ -18,6 +18,7 @@ namespace Tool{
 		/* 获取时间 */
 		static void GetTimestamp(char *szTimestamp);
 		static void GetDateTime(char *szDateTime);
+		static void GetDate(char *szDateTime);
 		/* 句柄处理 */
 		static HMODULE GetSelfModuleHandle();
 		static void GetCurrFileVersion(char *p);

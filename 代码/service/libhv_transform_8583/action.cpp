@@ -1,470 +1,706 @@
 #include "action.h"
 
-ISO8583_FieldFormat SampleFldFmt[ISO8583_MAXFIELD] = {
-    {ISO8583TYPE_BIN, 64},                     //  1
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 19},   //  2 PAN
-    {ISO8583TYPE_BCD, 6},                      //  3 Processing Code
-    {ISO8583TYPE_BCD, 12},                     //  4 Amount
-    {ISO8583TYPE_BCD, 12},                     //  5
-    {ISO8583TYPE_BCD, 12},                     //  6
-    {ISO8583TYPE_BCD, 10},                     //  7
-    {ISO8583TYPE_ASC, 1},                      //  8
-    {ISO8583TYPE_BCD, 8},                      //  9
-    {ISO8583TYPE_BCD, 8},                      // 10
-    {ISO8583TYPE_BCD, 6},                      // 11 System trace
-    {ISO8583TYPE_BCD, 6},                      // 12 Time
-    {ISO8583TYPE_BCD, 4},                      // 13 Date
-    {ISO8583TYPE_BCD, 4},                      // 14 ExpDate
-    {ISO8583TYPE_BCD, 4},                      // 15 Settlement date
-    {ISO8583TYPE_ASC, 1},                      // 16
-    {ISO8583TYPE_BCD, 4},                      // 17
-    {ISO8583TYPE_BCD, 5},                      // 18
-    {ISO8583TYPE_BCD, 3},                      // 19
-    {ISO8583TYPE_BCD, 3},                      // 20
-    {ISO8583TYPE_ASC, 7},                      // 21
-    {ISO8583TYPE_BCD, 3},                      // 22 POS entry mode
-    {ISO8583TYPE_BCD, 3},                      // 23 IC Application PAN
-    {ISO8583TYPE_ASC, 2},                      // 24 NII
-    {ISO8583TYPE_BCD, 2},                      // 25
-    {ISO8583TYPE_BCD, 2},                      // 26
-    {ISO8583TYPE_BCD, 1},                      // 27
-    {ISO8583TYPE_BCD, 8},                      // 28
-    {ISO8583TYPE_BCD, 8},                      // 29
-    {ISO8583TYPE_BCD, 8},                      // 30
-    {ISO8583TYPE_BCD, 8},                      // 31
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 11},   // 32
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 11},   // 33
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 28},   // 34
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 37},   // 35 Track2
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 104},  // 36 Track3
-    {ISO8583TYPE_ASC, 12},                     // 37 System Reference No
-    {ISO8583TYPE_ASC, 6},                      // 38 System AuthID
-    {ISO8583TYPE_ASC, 2},                      // 39 Response Code
-    {ISO8583TYPE_ASC, 3},                      // 40
-    {ISO8583TYPE_ASC, 8},                      // 41 TID
-    {ISO8583TYPE_ASC, 15},                     // 42 CustomID
-    {ISO8583TYPE_ASC, 40},                     // 43 Custom Name
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 25},   // 44
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 76},   // 45 Track1
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 46
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 47
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 999},  // 48
-    {ISO8583TYPE_ASC, 3},                      // 49 Currency Code  Transaction
-    {ISO8583TYPE_ASC, 3},                      // 50
-    {ISO8583TYPE_ASC, 3},                      // 51
-    {ISO8583TYPE_BIN, 64},                     // 52 PIN block Data
-    {ISO8583TYPE_BCD, 16},                     // 53 Security Data
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 320},  // 54
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 55 ICC information
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 56
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 57
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 58
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 59
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 999},  // 60 Additional Data
-    {ISO8583TYPE_BCD | ISO8583TYPE_VAR, 999},  // 61 Additional Data
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 62 Additional Data
-    {ISO8583TYPE_ASC | ISO8583TYPE_VAR, 999},  // 63 Additional Data
-    {ISO8583TYPE_BIN, 64},                     // 64 MAC data
-};
-
 static size_t http_response(void* contents, size_t size, size_t nmemb, void* userp)
 {
-    int isize = 0;
-    char strSize[4];
     size_t realsize = size * nmemb;
     char** response_ptr = (char**)userp;
 
-    if (*response_ptr == NULL)
-    {
-        printf("*response_ptr NULL\n");
-        *response_ptr = (char*)calloc(1, realsize + 1 + 4);
-        isize = 0;
-        memcpy(*response_ptr, &isize, 4);
-    }
-    else
-    {
-        memset(strSize, 0, sizeof(strSize));
-        memcpy(strSize, *response_ptr, 4);
-        isize = *(int*)strSize;
-        printf("size==%d\n", isize);
-        *response_ptr = (char*)realloc(*response_ptr, isize + realsize + 1 + 4);
-    }
-
-    if (*response_ptr == NULL)
-    {
+    if (*response_ptr == NULL) {
+        *response_ptr = (char*)calloc(1, realsize + 1);
+        if (*response_ptr == NULL) {
+            printf("Not enough memory (calloc failed)\n");
+            return 0;
+        }
+    } else {
+        size_t old_size = strlen(*response_ptr);
+        char* temp = (char*)realloc(*response_ptr, old_size + realsize + 1);
+        if (temp == NULL) {
+            printf("Not enough memory (realloc returned NULL)\n");
         free(*response_ptr);
-        printf("not enough memory (realloc returned NULL)\n");
+            *response_ptr = NULL;
         return 0;
+        }
+        *response_ptr = temp;
     }
 
-    memcpy((*response_ptr) + isize + 4, contents, realsize);
-    isize += realsize;
-    memcpy(*response_ptr, &isize, 4);
-    (*response_ptr)[isize + 4] = 0;
-
+    memcpy(*response_ptr + strlen(*response_ptr), contents, realsize);
+    (*response_ptr)[strlen(*response_ptr) + realsize] = '\0';
     return realsize;
+}
+
+std::string performHttpRequest(const std::string& url, const std::string& params) {
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        LOG_ERROR("CURL初始化失败");
+        return "";
+    }
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    headers = curl_slist_append(headers, ("Content-Length: " + std::to_string(params.length())).c_str());
+
+    char* response = NULL;
+    char errbuf[CURL_ERROR_SIZE] = {0};
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, params.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_response);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+
+    CURLcode res = curl_easy_perform(curl);
+    std::string result;
+    if (res != CURLE_OK) {
+        LOG_ERROR("HTTP请求失败: %s", errbuf);
+    } else {
+        if (response) {
+            result = response;
+            free(response);
+        }
+    }
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    return result;
+}
+
+std::string sha256(const std::string &str) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, str.c_str(), str.size());
+    SHA256_Final(hash, &sha256);
+
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    return ss.str();
+}
+
+std::string bytes_to_hex(const unsigned char* bytes, size_t len) {
+    std::stringstream ss;
+    for (size_t i = 0; i < len; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)bytes[i];
+    }
+    return ss.str();
+}
+
+std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hex.length(); i += 2) {
+        std::string byteString = hex.substr(i, 2);
+        unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
+
+int aes_ecb_decrypt(const unsigned char *ciphertext, int cipher_len, unsigned char *plaintext, unsigned char *key) {
+    
+    if (cipher_len % AES_BLOCK_SIZE != 0) {
+        LOG_ERROR("解密长度不是16的整数倍，无法解密");
+        return -1;
+    }
+
+    AES_KEY decryptKey;
+    if (AES_set_decrypt_key(key, 128, &decryptKey) != 0) {
+        LOG_ERROR("AES密钥设置失败");
+        return -1;
+    }
+
+    int len = 0;
+    while (len + AES_BLOCK_SIZE <= cipher_len) {
+        AES_ecb_encrypt(ciphertext + len, plaintext + len, &decryptKey, AES_DECRYPT);
+        len += AES_BLOCK_SIZE;
+    }
+
+    if (len > 0) {
+        unsigned char padding_len = plaintext[len - 1];
+        if (padding_len > 0 && padding_len <= AES_BLOCK_SIZE) {
+            bool valid_padding = true;
+            for (int i = 0; i < padding_len; i++) {
+                if (plaintext[len - 1 - i] != padding_len) {
+                    valid_padding = false;
+                    break;
+                }
+            }
+            if (valid_padding) {
+                len -= padding_len;
+            }
+        }
+    }
+
+    return len;
+}
+
+std::string generateSign(const std::string &data) {
+    std::string rawData = data + globalCFG.gtIV;
+    LOG_INFO("待签名数据: %s", rawData.c_str());
+    return sha256(rawData);
+}
+
+std::string buildCommonParam(const POSTRANS_GT_COMMON& common) {
+    
+    return "CUST_ID=" + common.CUST_ID + 
+           "|#|TERM_SN=" + common.TERM_SN +
+           "|#|POS_TOKEN=" + GetPosToken(common.TERM_SN) +
+           "|#|POS_IMEI=" + common.POS_IMEI +
+           "|#|SYSCOD=" + common.SYSCOD + 
+           "|#|U_GPS_ADDREES=" + common.U_GPS_ADDREES +
+           "|#|MOBMODEL=" + common.MOBMODEL + 
+           "|#|TXNDAT=" + common.TXNDAT +
+           "|#|TXNTIM=" + common.TXNTIM;
+}
+
+bool parseResponse(const std::string& decryptedText, std::string& respCode) {
+    try {
+        POSTRANS_GT_COMMON_RESPONSE data;
+        xpack::json::decode(decryptedText, data);
+        respCode = data.RSPCOD;
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("解析响应数据失败: %s", e.what());
+        return false;
+    }
+}
+
+bool doSignIn(POSTRANS_GT_COMMON& common) {
+    LOG_INFO("开始执行自动签到流程获取新token");
+    
+    try {
+        
+        std::string commonParam = buildCommonParam(common);
+        std::string signParam = commonParam + 
+                               "|#|APP_VERSION=" + common.APP_VERSION + 
+                               "|#|APP_TERMVERSION=" + common.APP_TERMVERSION +
+                               "|#|ICC_ID=" + common.ICC_ID;
+        
+        std::string sText = "\"" + signParam + "\"";
+        std::string sign = generateSign(signParam);
+        
+        std::string params = "sText=" + sText +
+                           "&THIRD_ACCESS_CODE=" + common.THIRD_ACCESS_CODE +
+                           "&sign=" + sign;
+        
+        std::string fullUrl = std::string(globalCFG.gtUrl) + "800502.po";
+        LOG_INFO("签到URL: %s", fullUrl.c_str());
+        
+        // 发送签到请求
+        std::string responseStr = performHttpRequest(fullUrl, params);
+        if (responseStr.empty()) {
+            LOG_ERROR("签到请求失败，未收到响应");
+            return false;
+        }
+        
+        std::vector<unsigned char> cipher_bytes = hex_to_bytes(responseStr);
+        if (cipher_bytes.empty()) {
+            LOG_ERROR("签到响应数据转换失败，响应原文: %s", responseStr.c_str());
+            return false;
+        }
+        
+        unsigned char plaintext[4096] = {0};
+        int decrypted_len = aes_ecb_decrypt(cipher_bytes.data(), cipher_bytes.size(), plaintext, (unsigned char*)globalCFG.gtKey);
+        if (decrypted_len <= 0) {
+            LOG_ERROR("签到响应解密失败，响应长度: %zu", cipher_bytes.size());
+            return false;
+        }
+        
+        plaintext[decrypted_len] = '\0';
+        std::string utf8_text((char*)plaintext, decrypted_len);
+        LOG_INFO("签到解密后数据: %s", utf8_text.c_str());
+        
+        // 解析响应获取token
+        try {
+            POSTRANS_SIGN_RESPONSE signResponse;
+            xpack::json::decode(utf8_text, signResponse);
+            
+            if (signResponse.RSPCOD != "000000") {
+                LOG_ERROR("签到失败，响应码: %s, 响应信息: %s", 
+                         signResponse.RSPCOD.c_str(), 
+                         signResponse.RSPMSG.c_str());
+                return false;
+            }
+            
+            if (signResponse.POS_TOKEN.empty()) {
+                LOG_ERROR("签到成功但未获取到token");
+                return false;
+            }
+            
+            // 保存新token
+            common.POS_TOKEN = signResponse.POS_TOKEN;
+            LOG_INFO("签到成功，获取新token: %s", signResponse.POS_TOKEN.c_str());
+            
+            // 更新token到数据库
+            POS_TOKEN posToken;
+            posToken.TERM_SN = common.TERM_SN;
+            posToken.POS_TOKEN = signResponse.POS_TOKEN;
+            if (UpdatePosToken(posToken) != 0) {
+                LOG_WARN("数据库更新token失败，但仍将继续使用新token");
+            }
+            
+            return true;
+        } catch (const std::exception& e) {
+            LOG_ERROR("解析签到响应失败: %s, 响应数据: %s", e.what(), utf8_text.c_str());
+            return false;
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("签到流程异常: %s", e.what());
+        return false;
+    } catch (...) {
+        LOG_ERROR("签到流程中发生未知异常");
+        return false;
+    }
+}
+
+bool processTransaction(const std::string& fullParam, const std::string& endpoint, POSTRANS_GT_COMMON& common, 
+                       char* sendbuf, int* sendLen, bool isRetry = false) {
+    try {
+        std::string sText = "\"" + fullParam + "\"";
+        std::string sign = generateSign(fullParam);
+        
+        std::string params = "sText=" + sText +
+                            "&THIRD_ACCESS_CODE=" + common.THIRD_ACCESS_CODE +
+                            "&sign=" + sign;
+        
+        std::string fullUrl = std::string(globalCFG.gtUrl) + endpoint;
+        LOG_INFO("请求URL: %s, 交易类型: %s", fullUrl.c_str(), endpoint.c_str());
+
+        
+        // 发送请求
+        std::string responseStr = performHttpRequest(fullUrl, params);
+        if (responseStr.empty()) {
+            LOG_ERROR("请求失败，未收到响应");
+            return false;
+        }
+        
+        // 解密响应
+        std::vector<unsigned char> cipher_bytes = hex_to_bytes(responseStr);
+        if (cipher_bytes.empty()) {
+            LOG_ERROR("响应数据转换失败，响应原文: %s", responseStr.c_str());
+            return false;
+        }
+        
+        unsigned char plaintext[4096] = {0};
+        int decrypted_len = aes_ecb_decrypt(cipher_bytes.data(), cipher_bytes.size(), plaintext, (unsigned char*)globalCFG.gtKey);
+        if (decrypted_len <= 0) {
+            LOG_ERROR("解密失败，响应长度: %zu", cipher_bytes.size());
+            return false;
+        }
+        
+        plaintext[decrypted_len] = '\0';
+        std::string utf8_text((char*)plaintext, decrypted_len);
+        LOG_INFO("解密后数据: %s", utf8_text.c_str());
+        
+        // 检查响应码
+        std::string respCode;
+        if (parseResponse(utf8_text, respCode)) {
+            LOG_INFO("响应码: %s", respCode.c_str());
+            
+            // 检查token是否过期
+            if ((respCode == "008077" || respCode == "008777") && !isRetry) {
+                LOG_INFO("Token已过期(RSPCOD=%s)，准备重新签到", respCode.c_str());
+                
+                // 执行签到获取新token
+                if (doSignIn(common)) {
+                    // 重新构建参数，替换token
+                    std::string commonParam = buildCommonParam(common);
+                    
+                    // 更安全地提取特定参数部分
+                    std::string specificParam;
+                    size_t txntimPos = fullParam.find("|#|TXNTIM=");
+                    if (txntimPos != std::string::npos) {
+                        // 找到TXNTIM后的第一个|#|
+                        size_t nextParamPos = fullParam.find("|#|", txntimPos + 10);
+                        if (nextParamPos != std::string::npos) {
+                            // 截取后面所有的特定参数
+                            specificParam = fullParam.substr(nextParamPos + 3);
+                        } else {
+                            // 如果没找到后面的|#|，可能是参数格式有问题
+                            LOG_ERROR("参数格式异常，无法提取特定参数");
+                            return false;
+                        }
+                    } else {
+                        // 如果没找到TXNTIM，可能是参数格式有问题
+                        LOG_ERROR("参数格式异常，未找到TXNTIM字段");
+                        return false;
+                    }
+                    
+                    std::string newFullParam = commonParam + "|#|" + specificParam;
+                    LOG_INFO("使用新token重试交易，新参数: %s", newFullParam.c_str());
+                    
+                    // 使用新token重试
+                    return processTransaction(newFullParam, endpoint, common, sendbuf, sendLen, true);
+                } else {
+                    LOG_ERROR("重新签到失败，无法获取新token");
+                    return false;
+                }
+            } else if (respCode != "000000" && !isRetry) {
+                // 处理其他错误码，这里只记录日志，不做特殊处理
+                LOG_WARN("交易返回非成功响应码: %s", respCode.c_str());
+            }
+        } else {
+            LOG_ERROR("无法解析响应数据中的响应码");
+        }
+        
+        // 处理响应数据
+        size_t utf8_len = utf8_text.length();
+        
+        // 检查缓冲区大小是否足够
+        if (utf8_len > 0xFFFF) {  // 超过2字节能表示的最大值
+            LOG_ERROR("响应数据过大，无法放入缓冲区: %zu bytes", utf8_len);
+            return false;
+        }
+        
+        sendbuf[0] = utf8_len / 256;
+        sendbuf[1] = utf8_len % 256;
+        memcpy(sendbuf + 2, utf8_text.c_str(), utf8_len);
+        *sendLen = utf8_len + 2;
+        
+        LOG_INFO("交易处理完成，返回数据长度: %zu bytes", utf8_len);
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("处理交易异常: %s", e.what());
+        return false;
+    } catch (...) {
+        LOG_ERROR("处理交易时发生未知异常");
+        return false;
+    }
+}
+
+void copyToSendBuffer(const std::string& errorMsg, char* sendbuf, int* sendLen) {
+    size_t errorLen = errorMsg.length();
+    sendbuf[0] = errorLen / 256;
+    sendbuf[1] = errorLen % 256;
+    memcpy(sendbuf + 2, errorMsg.c_str(), errorLen);
+    *sendLen = errorLen + 2;
+}
+
+std::string md5Hash(const std::string& input) {
+    unsigned char md[MD5_DIGEST_LENGTH];
+    MD5((const unsigned char*)input.c_str(), input.size(), md);
+
+    std::stringstream ss;
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)md[i];
+    }
+
+    return ss.str().substr(0, 24); // 取前24位
+}
+
+std::string pkcs5Padding(const std::string& data, size_t blockSize) {
+    size_t padding = blockSize - (data.size() % blockSize);
+    std::string padded = data;
+    padded.append(padding, (char)padding);
+    return padded;
+}
+
+std::string des3Encrypt(const std::string& key, const std::string& plaintext) {
+    DES_key_schedule ks1, ks2, ks3;
+    DES_cblock key1, key2, key3;
+
+    memcpy(key1, key.c_str(), 8);
+    memcpy(key2, key.c_str() + 8, 8);
+    memcpy(key3, key.c_str() + 16, 8);
+
+    DES_set_key_unchecked(&key1, &ks1);
+    DES_set_key_unchecked(&key2, &ks2);
+    DES_set_key_unchecked(&key3, &ks3);
+
+    std::vector<unsigned char> out(plaintext.size());
+
+    for (size_t i = 0; i < plaintext.size(); i += 8) {
+        DES_ecb3_encrypt(
+            (const_DES_cblock*)(plaintext.data() + i),
+            (DES_cblock*)(out.data() + i),
+            &ks1, &ks2, &ks3,
+            DES_ENCRYPT);
+    }
+
+    return std::string(out.begin(), out.end());
+}
+
+std::string base64Encode(const std::string& input) {
+    BIO* bio, * b64;
+    BUF_MEM* bufferPtr;
+
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new(BIO_s_mem());
+    bio = BIO_push(b64, bio);
+
+    // 不加换行
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+    BIO_write(bio, input.data(), input.size());
+    BIO_flush(bio);
+    BIO_get_mem_ptr(bio, &bufferPtr);
+
+    std::string result(bufferPtr->data, bufferPtr->length);
+    BIO_free_all(bio);
+
+    return result;
+}
+
+std::string encryptCardNumber(const std::string& cardNumber, const std::string& token) {
+    // 1. 填充卡号
+    std::string paddedCard = cardNumber;
+    if (cardNumber.length() >= 16) {
+        paddedCard = pkcs5Padding(cardNumber, 24);
+    } else {
+        paddedCard = pkcs5Padding(cardNumber, 8);
+    }
+
+    std::cout << "Padded Card: " << paddedCard << std::endl;
+
+    // 2. 生成 MD5 并取前24位
+    std::string md5Key = md5Hash(token);
+    std::cout << "MD5 Key (24位): " << md5Key << std::endl;
+
+    // 3. 3DES 加密
+    std::string encrypted = des3Encrypt(md5Key, paddedCard);
+    std::cout << "Encrypted Data: " << encrypted << std::endl;
+
+    // 4. Base64 编码
+    std::string encoded = base64Encode(encrypted);
+    std::cout << "Base64 Encoded: " << encoded << std::endl;
+
+    return encoded;
+}
+
+// 将PINBLK进行PKCS7填充
+std::string processPINBLK(const std::string& pinblk) {
+    if (pinblk.empty()) {
+        return pinblk;
+    }
+    
+    try {
+        // 应用PKCS7填充
+        size_t blockSize = AES_BLOCK_SIZE;
+        size_t padding = blockSize - (pinblk.length() % blockSize);
+        std::string paddedData = pinblk;
+        for (size_t i = 0; i < padding; i++) {
+            paddedData.push_back((char)padding);
+        }
+        
+        return paddedData;
+    } catch (const std::exception& e) {
+        return pinblk;
+    }
+}
+
+void processGT(char* recvbuf, int recvLen, char* sendbuf, int* sendLen, const POSTRANS_RESPONSE& response) {
+    LOG_INFO("接收到GT请求: %s", response.transId.c_str());
+
+    try {
+        // 检查接收数据是否有效
+        if (recvbuf == nullptr || recvLen <= 0) {
+            LOG_ERROR("无效的请求数据");
+            std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"无效的请求数据\"}";
+            copyToSendBuffer(errorMsg, sendbuf, sendLen);
+            return;
+        }
+        
+        // 解析通用数据
+        POSTRANS_GT_COMMON common;
+        try {
+            xpack::json::decode(recvbuf, common);
+            LOG_INFO("解析common成功: TERM_SN=%s", common.TERM_SN.c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("解析common失败: %s", e.what());
+            std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"解析common失败: " + std::string(e.what()) + "\"}";
+            copyToSendBuffer(errorMsg, sendbuf, sendLen);
+            return;
+        }
+
+        // 构建通用参数
+        std::string commonParam = buildCommonParam(common);
+        std::string fullParam;
+        std::string endpoint;
+
+        // 处理不同交易类型
+        int transType = atoi(response.transId.c_str());
+        try {
+            switch (transType) {
+                case TRANSID_SIGN: {
+                    LOG_INFO("处理签到交易");
+                    POSTRANS_GT_SIGN_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+                    
+                    // 将从request获取的值更新到common中，以便重试时使用
+                    common.APP_VERSION = request.APP_VERSION;
+                    common.APP_TERMVERSION = request.APP_TERMVERSION;
+                    common.ICC_ID = request.ICC_ID;
+
+                    fullParam = commonParam + 
+                               "|#|APP_VERSION=" + request.APP_VERSION + 
+                               "|#|APP_TERMVERSION=" + request.APP_TERMVERSION +
+                               "|#|ICC_ID=" + request.ICC_ID;
+
+                    endpoint = "800502.po";
+                    break;
+                }
+                case TRANSID_CONSUME: {
+                    LOG_INFO("处理消费交易");
+                    POSTRANS_GT_CONSUME_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+
+                    fullParam = commonParam + 
+                               "|#|THREE_ORDER_NO=" + request.THREE_ORDER_NO + 
+                               "|#|PINBLK=" + processPINBLK(request.PINBLK) +
+                               "|#|PAY_WAY=" + request.PAY_WAY +
+                               "|#|MEDIATYPE=" + request.MEDIATYPE +
+                               "|#|CRDNO=" + encryptCardNumber(request.CRDNO, common.POS_TOKEN) +
+                               "|#|TRACK2=" + encryptCardNumber(request.TRACK2, common.PINKEY) +
+                               "|#|AMOUNT=" + request.AMOUNT +
+                               "|#|DCDATA=" + request.DCDATA +
+                               "|#|TRAN_TYPE=" + request.TRAN_TYPE +
+                               "|#|DEVICE_TYPE=" + request.DEVICE_TYPE +
+                               "|#|ENC_RANDOM=" + request.ENC_RANDOM +
+                               "|#|TERM_SERIAL_ENCNO=" + request.TERM_SERIAL_ENCNO +
+                               "|#|AP_VERSION_NO=" + request.AP_VERSION_NO +
+                               "|#|ICNUMBER=" + request.ICNUMBER +
+                               "|#|SIGE_TYPE=" + request.SIGE_TYPE +
+                               "|#|BUY_PRO_FLAG=" + request.BUY_PRO_FLAG +
+                               "|#|REMARK=" + request.REMARK +
+                               "|#|SIGN_FLAG=" + request.SIGN_FLAG +
+                               "|#|UNI_STRCODE=" + request.UNI_STRCODE;
+
+                    endpoint = "800222.po";
+                    break;
+                }
+                case TRANSID_CANCEL: {
+                    LOG_INFO("处理撤销交易");
+                    POSTRANS_GT_CANCEL_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+
+                    fullParam = commonParam + 
+                               "|#|THREE_ORDER_NO=" + request.THREE_ORDER_NO + 
+                               "|#|ORDER_NO=" + request.ORDER_NO +
+                               "|#|CRDNO=" + encryptCardNumber(request.CRDNO, common.POS_TOKEN) +
+                               "|#|TRACK2=" + encryptCardNumber(request.TRACK2, common.PINKEY) +
+                               "|#|PAY_WAY=" + request.PAY_WAY +
+                               "|#|SIGN_FLAG=" + request.SIGN_FLAG;
+
+                    endpoint = "835003.po";
+                    break;
+                }
+                case TRANSID_REFUND: {
+                    LOG_INFO("处理退货交易");
+                    POSTRANS_GT_REFUND_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+
+                    fullParam = commonParam + 
+                               "|#|THREE_ORDER_NO=" + request.THREE_ORDER_NO + 
+                               "|#|ORDER_NO=" + request.ORDER_NO +
+                               "|#|REFUND_AMT=" + request.REFUND_AMT +
+                               "|#|PAY_WAY=" + request.PAY_WAY +
+                               "|#|CRDNO=" + encryptCardNumber(request.CRDNO, common.POS_TOKEN) +
+                               "|#|TRACK2=" + encryptCardNumber(request.TRACK2, common.PINKEY) + 
+                               "|#|SIGN_FLAG=" + request.SIGN_FLAG + 
+                               "|#|DEVICE_TYPE=" + request.DEVICE_TYPE + 
+                               "|#|ENC_RANDOM=" + request.ENC_RANDOM + 
+                               "|#|TERM_SERIAL_ENCNO=" + request.TERM_SERIAL_ENCNO + 
+                               "|#|AP_VERSION_NO=" + request.AP_VERSION_NO + 
+                               "|#|DCDATA=" + request.DCDATA + 
+                               "|#|ICNUMBER=" + request.ICNUMBER;
+
+                    endpoint = "835001.po";
+                    break;
+                }
+                case TRANSID_QUERY: {
+                    LOG_INFO("处理查余交易");
+                    POSTRANS_GT_QUERY_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+
+                    fullParam = commonParam + 
+                               "|#|PINBLK=" + processPINBLK(request.PINBLK) + 
+                               "|#|PAY_WAY=" + request.PAY_WAY +
+                               "|#|MEDIATYPE=" + request.MEDIATYPE +
+                               "|#|CRDNO=" + encryptCardNumber(request.CRDNO, common.POS_TOKEN) +
+                               "|#|TRACK2=" + encryptCardNumber(request.TRACK2, common.PINKEY) +
+                               "|#|DCDATA=" + request.DCDATA + 
+                               "|#|DEVICE_TYPE=" + request.DEVICE_TYPE + 
+                               "|#|ENC_RANDOM=" + request.ENC_RANDOM + 
+                               "|#|TERM_SERIAL_ENCNO=" + request.TERM_SERIAL_ENCNO + 
+                               "|#|AP_VERSION_NO=" + request.AP_VERSION_NO + 
+                               "|#|ICNUMBER=" + request.ICNUMBER;
+
+                    endpoint = "800221.po";
+                    break;
+                }
+                case TRANSID_REPRINT: {
+                    LOG_INFO("处理重打印交易");
+                    POSTRANS_GT_REPRINT_REQUEST request;
+                    xpack::json::decode(response.respMsg, request);
+
+                    fullParam = commonParam + 
+                               "|#|OPER_TYPE=" + request.OPER_TYPE + 
+                               "|#|TXNLOGID=" + request.TXNLOGID;
+
+                    endpoint = "800703.po";
+                    break;
+                }
+                case TRANSID_DOWNLOADKEY: {
+                    LOG_INFO("处理密钥下载");
+
+                    fullParam = commonParam;
+
+                    endpoint = "800503.po";
+                    break;
+                }
+                case TRANSID_ACTIVE: {
+                    LOG_INFO("处理绑定激活");
+
+                    fullParam = commonParam + 
+                                "|#|ACTIVE_CODE=" + response.respMsg;
+
+                    endpoint = "800503.po";
+                    break;
+                }
+                default:
+                    LOG_ERROR("未知交易类型: %s", response.transId.c_str());
+                    std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"未知交易类型\"}";
+                    copyToSendBuffer(errorMsg, sendbuf, sendLen);
+                    return;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("解析请求参数失败: %s", e.what());
+            std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"解析请求参数失败: " + std::string(e.what()) + "\"}";
+            copyToSendBuffer(errorMsg, sendbuf, sendLen);
+            return;
+        }
+
+        // 处理交易
+        if (!processTransaction(fullParam, endpoint, common, sendbuf, sendLen)) {
+            std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"处理交易失败\"}";
+            copyToSendBuffer(errorMsg, sendbuf, sendLen);
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("处理异常: %s", e.what());
+        std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"系统处理异常:" + std::string(e.what()) + "\"}";
+        copyToSendBuffer(errorMsg, sendbuf, sendLen);
+    } catch (...) {
+        LOG_ERROR("处理时发生未知异常");
+        std::string errorMsg = "{\"RSPCOD\":\"XX\",\"RSPMSG\":\"系统处理时发生未知异常\"}";
+        copyToSendBuffer(errorMsg, sendbuf, sendLen);
+    }
 }
 
 void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
 {
-    POS_SEND posSend;
-    POS_RECV posRecv;
-    string strPrint8583Data;
-    ostringstream ostr;
-    unsigned char szData[1024 * 3];
-    char szSize[4 + 1];
-    int iRet;
-    CURLcode res;
-    CURL* curlHandle = NULL;
-    char* pRes = NULL;
-    struct curl_slist* pHeaders = NULL;
-    ISO8583_Rec isoReq, isoRes;
-    int iFDServer = 0;
-    int nLen = 0;
 
-    ClearPosSend(posSend);
-    ClearPosRecv(posRecv);
+    std::string jsonStr(recvbuf + 2, recvLen - 2);
+    LOG_INFO("请求数据: %s", jsonStr.c_str());
 
-    // Initiate structure RequestIso8583
-    ISO8583Engine_ClearAllFields(&isoReq);
-    ISO8583Engine_ClearAllFields(&isoRes);
-
-    // Initiate field format
-    ISO8583Engine_InitFieldFormat(ISO8583_BITMAP64, &SampleFldFmt[0]);
-    ISO8583Engine_HexbufToIso8583(&isoReq, (unsigned char*)recvbuf + ISO8583_TOTAL_LEN + ISO8583_TPDU_LEN + ISO8583_HEAD_LEN);
-
-    strPrint8583Data = "请求8583内容解析为\n";
-    ostr.str("");
-    for (int i = 0; i <= 64; i++)
-    {
-        BUFCLR(szData);
-        iRet = ISO8583Engine_GetField(&isoReq, i, szData, sizeof(szData));
-        if (iRet > 0)
-        {
-            ostr << "第[" << setw(2) << setfill('0') << i << "]域[" << setw(3) << setfill('0') << iRet << "][" << szData << "]\n";
-        }
+    try {
+        POSTRANS_RESPONSE response;
+        xpack::json::decode(jsonStr, response);
+        processGT(recvbuf + 2, recvLen - 2, sendbuf, sendLen, response);
+    } catch (const std::exception& e) {
+        std::string errorMsg = "解析错误: ";
+        errorMsg += e.what();
+        memcpy(sendbuf, errorMsg.c_str(), errorMsg.length());
+        *sendLen = errorMsg.length();
+        LOG_ERROR("解析错误: %s", e.what());
     }
-    strPrint8583Data.append(ostr.str());
-    LOG_DEBUG(strPrint8583Data.c_str());
-
-    {
-        LOG_TRACE("解析8583发起报文");
-        BUFCLR(szData);
-        ISO8583Engine_GetField(&isoReq, 0, szData, sizeof(szData));
-        if (strcmp((char*)szData, "0200") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 3, szData, sizeof(szData));
-            if (memcmp(szData, "00", 2) == 0)
-            {
-                posSend.TRANS = POSTRANS_CONSUME;
-            }
-            else if (memcmp(szData, "20", 2) == 0)
-            {
-                posSend.TRANS = POSTRANS_CANCEL;
-            }
-        }
-        else if (strcmp((char*)szData, "0220") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 3, szData, sizeof(szData));
-            if (memcmp(szData, "20", 2) == 0)
-            {
-                posSend.TRANS = POSTRANS_REFUND;
-            }
-        }
-        else if (strcmp((char*)szData, "0400") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 3, szData, sizeof(szData));
-            if (memcmp(szData, "00", 2) == 0)
-            {
-                posSend.TRANS = POSTRANS_CONSUME_REPAIR;
-            }
-            else if (memcmp(szData, "20", 2) == 0)
-            {
-                posSend.TRANS = POSTRANS_CANCEL_REPAIR;
-            }
-        }
-
-        if (posSend.TRANS != POSTRANS_OTHER)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 4, szData, sizeof(szData));
-            posSend.AMT = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 11, szData, sizeof(szData));
-            posSend.TRACE = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 42, szData, sizeof(szData));
-            posSend.MERCHANT_NO = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 41, szData, sizeof(szData));
-            posSend.TERMINAL_NO = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 2, szData, sizeof(szData));
-            posSend.CARD_NO = (char*)szData;
-            if (posSend.CARD_NO.length() == 0)
-            {
-                BUFCLR(szData);
-                ISO8583Engine_GetField(&isoReq, 35, szData, sizeof(szData));
-                char* p = strstr((char*)szData, (const char*)"D");
-                if (p != NULL)
-                {
-                    *p = 0x00;
-                }
-                p = strstr((char*)szData, (const char*)"=");
-                if (p != NULL)
-                {
-                    *p = 0x00;
-                }
-                posSend.CARD_NO = (char*)szData;
-            }
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoReq, 60, szData, sizeof(szData));
-            szData[2 + 6] = 0x00;
-            posSend.BATCH = (char*)szData + 2;
-        }
-
-        InsertPosSend(posSend);
-
-        posRecv.TRANS = posSend.TRANS;
-        posRecv.MERCHANT_NO = posSend.MERCHANT_NO;
-        posRecv.TERMINAL_NO = posSend.TERMINAL_NO;
-        posRecv.TRACE = posSend.TRACE;
-        posRecv.BATCH = posSend.BATCH;
-        posRecv.CARD_NO = posSend.CARD_NO;
-        posRecv.CARD_NO = posSend.AMT;
-    }
-
-    if (globalCFG.iHttpEnable == 1)
-    {
-        curlHandle = curl_easy_init();
-        if (curlHandle)
-        {
-            curl_easy_setopt(curlHandle, CURLOPT_HEADER, 0L);
-            curl_easy_setopt(curlHandle, CURLOPT_URL, globalCFG.url);
-            curl_easy_setopt(curlHandle, CURLOPT_HTTPPOST, 1);
-            curl_easy_setopt(curlHandle, CURLOPT_SSL_VERIFYPEER, 0);
-            curl_easy_setopt(curlHandle, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, recvbuf);
-            curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE, recvLen);
-            curl_easy_setopt(curlHandle, CURLOPT_FORBID_REUSE, 1);
-            curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT, globalCFG.iRecvTimeout);
-            curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
-            curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT, globalCFG.iConnTimeout);
-            curl_easy_setopt(curlHandle, CURLOPT_WRITEFUNCTION, http_response);
-            curl_easy_setopt(curlHandle, CURLOPT_WRITEDATA, &pRes);
-
-            pHeaders = curl_slist_append(pHeaders, HTTPUSRTAGENT);
-            pHeaders = curl_slist_append(pHeaders, HTTPCACHECONTROL);
-            pHeaders = curl_slist_append(pHeaders, HTTPCONTENTTYPE);
-            pHeaders = curl_slist_append(pHeaders, HTTPACCEPT);
-            curl_easy_setopt(curlHandle, CURLOPT_HTTPHEADER, pHeaders);
-            res = curl_easy_perform(curlHandle);
-            if (res == CURLE_OK && pRes != NULL)
-            {
-                BUFCLR(szSize);
-                memcpy(szSize, pRes, 4);
-                *sendLen = *(int*)szSize;
-                memcpy(sendbuf, pRes + 4, *sendLen);
-                LOG_INFOSB(sendbuf, *sendLen, "LIBCURL通讯成功[%d]", *sendLen);
-            }
-            else
-            {
-                LOG_ERROR("LIBCURl通讯失败 [%s] [%s]", globalCFG.url, curl_easy_strerror(res));
-
-                goto cleanUP;
-            }
-        }
-        else
-        {
-            LOG_ERROR("LIBCURl申请失败");
-            goto cleanUP;
-        }
-    }
-    else
-    {
-        iFDServer = EI_iCreateClientSocketWithTimeout(globalCFG.szSocketIp, globalCFG.iSocketPort, AF_INET, SOCK_STREAM, globalCFG.iConnTimeout, 0);
-        if (iFDServer <= 0)
-        {
-            posRecv.RESP_CODE = "XX";
-            posRecv.RESP_MSG = "SOCKET链接失败";
-            LOG_ERROR("SOCKET链接失败 [%s:%d] [%d]", globalCFG.szSocketIp, globalCFG.iSocketPort, iFDServer);
-            goto cleanUP;
-        }
-        if (EI_iSetSocketRecvTimeout(iFDServer, globalCFG.iRecvTimeout, 0) == -1)
-        {
-            LOG_ERROR("SOCKET设置超时时间失败 [%s:%d]", globalCFG.szSocketIp, globalCFG.iSocketPort);
-        }
-        nLen = EI_iSendBuf(iFDServer, recvbuf, recvLen);
-        if (nLen < 0)
-        {
-            posRecv.RESP_CODE = "XX";
-            posRecv.RESP_MSG = "SOCKET发送报文失败";
-            LOG_ERRORSB(recvbuf, recvLen, "SOCKET发送报文失败 [%s:%d] [%d]", globalCFG.szSocketIp, globalCFG.iSocketPort, nLen);
-            goto cleanUP;
-        }
-        nLen = EI_iRecvNBytes(iFDServer, sendbuf, ISO8583_TOTAL_LEN);
-        if (nLen != ISO8583_TOTAL_LEN)
-        {
-            posRecv.RESP_CODE = "XX";
-            posRecv.RESP_MSG = "SOCKET接收报文头失败";
-            LOG_ERRORSB(sendbuf, ISO8583_TOTAL_LEN, "SOCKET接收报文头失败 [%s:%d] [%d]", globalCFG.szSocketIp, globalCFG.iSocketPort, nLen);
-            goto cleanUP;
-        }
-
-        *sendLen = ((unsigned char)(sendbuf[0])) * 256 + (unsigned char)sendbuf[1] + ISO8583_TOTAL_LEN;
-        LOG_DEBUG("准备接收报文[%d]", *sendLen);
-        nLen = EI_iRecvNBytes(iFDServer, sendbuf + ISO8583_TOTAL_LEN, *sendLen - ISO8583_TOTAL_LEN);
-        if (nLen != *sendLen - ISO8583_TOTAL_LEN)
-        {
-            posRecv.RESP_CODE = "XX";
-            posRecv.RESP_MSG = "SOCKET接收报文内容失败";
-            LOG_ERRORSB(sendbuf, *sendLen, "SOCKET接收报文内容失败 [%s:%d] [%d]", globalCFG.szSocketIp, globalCFG.iSocketPort, nLen);
-            goto cleanUP;
-        }
-    }
-
-    ISO8583Engine_HexbufToIso8583(&isoRes, (unsigned char*)sendbuf + ISO8583_TOTAL_LEN + ISO8583_TPDU_LEN + ISO8583_HEAD_LEN);
-
-    strPrint8583Data = "返回8583内容解析为\n";
-    ostr.str("");
-    for (int i = 0; i <= 64; i++)
-    {
-        BUFCLR(szData);
-        iRet = ISO8583Engine_GetField(&isoRes, i, szData, sizeof(szData));
-        if (iRet > 0)
-        {
-            ostr << "第[" << setw(2) << setfill('0') << i << "]域[" << setw(3) << setfill('0') << iRet << "][" << szData << "]\n";
-        }
-    }
-    strPrint8583Data.append(ostr.str());
-    LOG_DEBUG(strPrint8583Data.c_str());
-
-    {
-        ClearPosRecv(posRecv);
-        LOG_TRACE("解析8583返回报文");
-        BUFCLR(szData);
-        ISO8583Engine_GetField(&isoRes, 0, szData, sizeof(szData));
-        if (strcmp((char*)szData, "0210") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 3, szData, sizeof(szData));
-            if (memcmp(szData, "00", 2) == 0)
-            {
-                posRecv.TRANS = POSTRANS_CONSUME;
-            }
-            else if (memcmp(szData, "20", 2) == 0)
-            {
-                posRecv.TRANS = POSTRANS_CANCEL;
-            }
-        }
-        else if (strcmp((char*)szData, "0230") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 3, szData, sizeof(szData));
-            if (memcmp(szData, "20", 2) == 0)
-            {
-                posRecv.TRANS = POSTRANS_REFUND;
-            }
-        }
-        if (strcmp((char*)szData, "0410") == 0)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 3, szData, sizeof(szData));
-            if (memcmp(szData, "00", 2) == 0)
-            {
-                posRecv.TRANS = POSTRANS_CONSUME_REPAIR;
-            }
-            else if (memcmp(szData, "20", 2) == 0)
-            {
-                posRecv.TRANS = POSTRANS_CANCEL_REPAIR;
-            }
-        }
-        if (posRecv.TRANS != POSTRANS_OTHER)
-        {
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 4, szData, sizeof(szData));
-            posRecv.AMT = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 12, szData, sizeof(szData));
-            posRecv.TRANS_TIME = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 13, szData, sizeof(szData));
-            posRecv.TRANS_DATE = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 37, szData, sizeof(szData));
-            posRecv.REF_NO = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 39, szData, sizeof(szData));
-            posRecv.RESP_CODE = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 11, szData, sizeof(szData));
-            posRecv.TRACE = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 42, szData, sizeof(szData));
-            posRecv.MERCHANT_NO = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 41, szData, sizeof(szData));
-            posRecv.TERMINAL_NO = (char*)szData;
-
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 2, szData, sizeof(szData));
-            posRecv.CARD_NO = (char*)szData;
-            if (posRecv.CARD_NO.length() == 0)
-            {
-                BUFCLR(szData);
-                ISO8583Engine_GetField(&isoReq, 35, szData, sizeof(szData));
-                char* p = strstr((char*)szData, (const char*)"D");
-                if (p != NULL)
-                {
-                    *p = 0x00;
-                }
-                p = strstr((char*)szData, (const char*)"=");
-                if (p != NULL)
-                {
-                    *p = 0x00;
-                }
-                posRecv.CARD_NO = (char*)szData;
-            }
-            BUFCLR(szData);
-            ISO8583Engine_GetField(&isoRes, 60, szData, sizeof(szData));
-            szData[2 + 6] = 0x00;
-            posRecv.BATCH = (char*)szData + 2;
-        }
-    }
-
-cleanUP:
-    InsertPosRecv(posRecv);
-    if (pRes != NULL)
-    {
-        free(pRes);
-        pRes = NULL;
-    }
-    if (pHeaders != NULL)
-    {
-        curl_slist_free_all(pHeaders);
-    }
-    if (curlHandle != NULL)
-    {
-        curl_easy_cleanup(curlHandle);
-    }
-    if (iFDServer > 0)
-    {
-        close(iFDServer);
-    }
-    return;
 }

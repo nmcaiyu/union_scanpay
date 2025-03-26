@@ -23,6 +23,9 @@ int readIni()
     strcpy(globalCFG.url, reader.Get("info", "url", "").c_str());
     globalCFG.iConnTimeout = reader.GetInteger("info", "connTimeout", 10);
     globalCFG.iRecvTimeout = reader.GetInteger("info", "recvTimeout", 50);
+    strcpy(globalCFG.gtUrl, reader.Get("info", "gtUrl", "").c_str());
+    strcpy(globalCFG.gtKey, reader.Get("info", "gtKey", "").c_str());
+    strcpy(globalCFG.gtIV, reader.Get("info", "gtIV", "").c_str());
 
     // mysql
     strcpy(globalCFG.szMysqlUrl, reader.Get("mysql", "url", "").c_str());

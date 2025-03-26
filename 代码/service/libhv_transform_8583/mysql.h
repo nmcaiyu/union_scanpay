@@ -27,8 +27,15 @@ typedef struct
     string MERCHANT_NO, TERMINAL_NO, TRACE, BATCH, CARD_NO, AMT, REF_NO, TRANS_DATE, TRANS_TIME, RESP_CODE, RESP_MSG;
 } POS_RECV;
 
+typedef struct
+{
+    string TERM_SN, POS_TOKEN;
+} POS_TOKEN;
+
 int initMysql();
 int InsertPosRecv(POS_RECV obj);
 int InsertPosSend(POS_SEND obj);
 void ClearPosSend(POS_SEND& obj);
 void ClearPosRecv(POS_RECV& obj);
+int UpdatePosToken(POS_TOKEN obj);
+string GetPosToken(string termSn);

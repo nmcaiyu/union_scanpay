@@ -27,6 +27,9 @@ typedef struct _CFG
     char url[MAX_URLLEN];
     char iConnTimeout;
     char iRecvTimeout;
+    char gtUrl[MAX_URLLEN];
+    char gtKey[100 + 1];
+    char gtIV[100 + 1];
 
     // mysql
     char szMysqlUrl[MAX_URLLEN];

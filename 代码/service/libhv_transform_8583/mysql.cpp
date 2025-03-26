@@ -195,3 +195,101 @@ void ClearPosRecv(POS_RECV& obj)
     obj.RESP_CODE = "";
     obj.RESP_MSG = "";
 }
+
+int UpdatePosToken(POS_TOKEN obj)
+{
+    Connection_T con = NULL;
+    int iRet;
+    char szSQL[1024 * 2];
+    BUFCLR(szSQL);
+    sprintf(szSQL, "SELECT COUNT(*) FROM T_POS_TOKEN WHERE TERM_SN = '%s'", obj.TERM_SN.c_str());
+    TRY
+    {
+        LOG_DEBUG("执行sql语句 [%s]", szSQL);
+        con = ConnectionPool_getConnection(gDBPool);
+        if (con == NULL)
+        {
+            LOG_ERROR("获取MYSQL线程池链接失败");
+            iRet = -1;
+            return iRet;
+        }
+
+        PreparedStatement_T p = Connection_prepareStatement(con, szSQL);
+        ResultSet_T r = PreparedStatement_executeQuery(p);
+        if (ResultSet_next(r))
+        {
+            if (ResultSet_getInt(r, 1) == 0)
+            {
+                BUFCLR(szSQL);
+                sprintf(szSQL, "INSERT INTO T_POS_TOKEN (`TERM_SN`, `POS_TOKEN`) VALUES ('%s', '%s')", obj.TERM_SN.c_str(), obj.POS_TOKEN.c_str());
+            }
+            else
+            {
+                BUFCLR(szSQL);
+                sprintf(szSQL, "UPDATE T_POS_TOKEN SET POS_TOKEN = '%s' WHERE TERM_SN = '%s'", obj.POS_TOKEN.c_str(), obj.TERM_SN.c_str());
+            }
+        }
+        else
+        {
+            LOG_ERROR("查询T_POS_TOKEN表失败");
+            iRet = -1;
+            return iRet;
+        }
+
+        PreparedStatement_T p2 = Connection_prepareStatement(con, szSQL);
+        PreparedStatement_execute(p2);
+
+        iRet = 0;
+    }
+    CATCH(SQLException)
+    {
+        LOG_ERROR("执行SQL语句失败 %s", Exception_frame.message);
+        iRet = -1;
+    }
+    FINALLY { Connection_close(con); }
+    END_TRY;
+    return iRet;
+}
+
+string GetPosToken(string termSn)
+{
+    Connection_T con = NULL;
+    int iRet;
+    char szSQL[1024 * 2];
+    BUFCLR(szSQL);
+    sprintf(szSQL, "SELECT POS_TOKEN FROM T_POS_TOKEN WHERE TERM_SN = '%s'", termSn.c_str());
+    TRY
+    {
+        LOG_DEBUG("执行sql语句 [%s]", szSQL);
+        con = ConnectionPool_getConnection(gDBPool);
+        if (con == NULL)
+        {
+            LOG_ERROR("获取MYSQL线程池链接失败");
+            iRet = -1;
+            return "";
+        }
+
+        PreparedStatement_T p = Connection_prepareStatement(con, szSQL);
+        ResultSet_T r = PreparedStatement_executeQuery(p);
+        if (ResultSet_next(r))
+        {
+            string s = ResultSet_getString(r, 1);
+            return s;
+        }
+        else
+        {
+            LOG_ERROR("查询T_POS_TOKEN表失败");
+            iRet = -1;
+            return "";
+        }
+    }
+    CATCH(SQLException)
+    {
+        LOG_ERROR("执行SQL语句失败 %s", Exception_frame.message);
+        iRet = -1;
+        return "";
+    }
+    FINALLY { Connection_close(con); }
+    END_TRY;
+    return "";
+}

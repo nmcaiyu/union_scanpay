@@ -4,7 +4,7 @@ CC = gcc
 CPP = g++
 
 #public
-FLAG = -ggdb3 -Wall -Wextra -I/usr/local/include/hv -I/usr/local/include/zdb -fpermissive 
+FLAG = -ggdb3 -Wall -Wextra -I/usr/local/include/hv -I/usr/include/zdb -fpermissive 
 
 #object
 TARGET = slog.o action.o config.o main.o mysql.o

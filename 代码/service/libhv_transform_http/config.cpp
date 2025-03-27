@@ -17,6 +17,7 @@ int readIni() {
     globalCFG.thread_num = reader.GetInteger("listen", "thread_num", 100);
     
     strcpy(globalCFG.url, reader.Get("info", "url", "").c_str());
+    strcpy(globalCFG.gtUrl, reader.Get("info", "gtUrl", "").c_str());
     globalCFG.iConnTimeout = reader.GetInteger("info", "connTimeout", 10);
     globalCFG.iConnTimeout = reader.GetInteger("info", "recvTimeout", 50);
 

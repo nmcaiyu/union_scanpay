@@ -21,6 +21,7 @@ typedef struct _CFG
     int thread_num;
 
     char url[MAX_URLLEN];
+    char gtUrl[MAX_URLLEN];
     char iConnTimeout;
     char iRecvTimeout;
 

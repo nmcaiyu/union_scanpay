@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP_HOME=/root/service/libhv_transform_http
+APP_HOME=/home/ybkj/Workspace/libhv_transform_http
 APP_NAME=libhv_http
 
 #PID  代表是PID文件

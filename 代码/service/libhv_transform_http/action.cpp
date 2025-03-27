@@ -96,6 +96,42 @@ string trade_micropay_getmsg(trade_micropay_response res)
     }
 }
 
+string gt_trade_micropay_getmsg(gt_trade_micropay_response res)
+{
+    if (res.msg.length() > 0)
+    {
+        return res.msg;
+    }
+    else
+    {
+        return "未知返回信息";
+    }
+}
+
+string gt_trade_query_getmsg(gt_trade_query_response res)
+{
+    if (res.msg.length() > 0)
+    {
+        return res.msg;
+    }
+    else
+    {
+        return "未知返回信息";
+    }
+}
+
+string gt_trade_refund_getmsg(gt_trade_refund_response res)
+{
+    if (res.msg.length() > 0)
+    {
+        return res.msg;
+    }
+    else
+    {
+        return "未知返回信息";
+    }
+}
+
 string trade_query_getmsg(trade_query_response res)
 {
     if (res.trade_state_desc.length() > 0)
@@ -468,21 +504,370 @@ void analyzeXML(trade_content_request req, char* xmlReturn)
     }
 }
 
-void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
+void analyzeJSON(trade_content_request req, char* xmlReturn)
 {
+    SCAN_RECV scanRecv;
+    ClearScanRecv(scanRecv);
+    char szXML[1024 * 10];
+    BUFCLR(szXML);
+    DeleteCDATA((char*)szXML, (char*)xmlReturn);
+    if (req.service.compare("unified.trade.micropay") == 0)
+    {
+        gt_trade_micropay_response res;
+        try
+        {
+            scanRecv.SERVICE = SERVICE_PAY;
+            xpack::json::decode(szXML, res);
+            scanRecv.MERCHANT_ID = req.agetId;
+            scanRecv.OUT_TRADE_NO = res.data.threeOrderNo;
+            if (res.data.threeOrderNo.length() == 0)
+            {
+                scanRecv.OUT_TRADE_NO = req.orderNo;
+            }
+            scanRecv.APPID = req.agetId;
+            scanRecv.OPENID = res.data.openId;
+            scanRecv.TRANSACTION_ID = res.data.torderNo;
+            scanRecv.OUT_TRANSACTION_ID = res.data.threeOrderNo;
+            scanRecv.TOTAL_FEE = res.data.txamt;
+            scanRecv.TIME_END = res.data.orderTime;
+            if (res.code.compare("222222") == 0)
+            {
+                scanRecv.CODE = "01";
+                scanRecv.MESSAGE = gt_trade_micropay_getmsg(res);
+            }
+            else if (res.code.compare("000000") != 0 && res.code.compare("222222") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = gt_trade_micropay_getmsg(res);
+            }
+            else
+            {
+                scanRecv.CODE = "00";
+                scanRecv.MESSAGE = "";
+            }
+        } catch (const std::exception& e)
+        {
+            LOG_ERROR("JSON 解析失败: %s\n数据: %s\n", e.what(), szXML);
+            return;
+        }
+        InsertScanRecv(scanRecv);
+    }
+    else if (req.service.compare("unified.trade.refund") == 0)
+    {
+        gt_trade_refund_response res;
+        try
+        {
+            scanRecv.SERVICE = SERVICE_REF;
+            xpack::json::decode(szXML, res);
+            scanRecv.MERCHANT_ID = req.agetId;
+            scanRecv.OUT_TRADE_NO = res.data.threeOrderNo;
+            if (res.data.threeOrderNo.length() == 0)
+            {
+                scanRecv.OUT_TRADE_NO = req.orderNo;
+            }
+            // scanRecv.TRADE_TYPE = res.trade_type;
+            scanRecv.TRANSACTION_ID = res.data.threeOrderNo;
+            scanRecv.OUT_REFUND_NO = res.data.orderFlowNo;
+            if (res.data.orderFlowNo.length() == 0)
+            {
+                scanRecv.OUT_REFUND_NO = req.orderNo;
+            }
+            // scanRecv.REFUND_ID = res.refund_id;
+            scanRecv.REFUND_FEE = res.data.refundAmt;
+            if (res.code.compare("000000") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = gt_trade_refund_getmsg(res);
+            }
+            else
+            {
+                scanRecv.CODE = "00";
+                scanRecv.MESSAGE = "";
+            }
+        } catch (const std::exception& e)
+        {
+            LOG_ERROR("JSON 解析失败: %s\n数据: %s\n", e.what(), szXML);
+            return;
+        }
+        InsertScanRecv(scanRecv);
+    }
+    else if (req.service.compare("unified.trade.query") == 0)
+    {
+        gt_trade_query_response res;
+        try
+        {
+            scanRecv.SERVICE = SERVICE_PAY;
+            xpack::json::decode(szXML, res);
+            scanRecv.MERCHANT_ID = req.agetId;
+            scanRecv.OUT_TRADE_NO = res.data.threeOrderNo;
+            if (res.data.threeOrderNo.length() == 0)
+            {
+                scanRecv.OUT_TRADE_NO = req.orderNo;
+            }
+            scanRecv.APPID = req.agetId;
+            scanRecv.TRADE_TYPE = res.data.payChannel;
+            scanRecv.TRANSACTION_ID = res.data.torderNo;
+            scanRecv.OUT_TRANSACTION_ID = res.data.threeOrderNo;
+            scanRecv.TOTAL_FEE = res.data.txamt;
+            scanRecv.BANK_BILLNO = res.data.payNo;
+            scanRecv.TIME_END = res.data.orderTime;
+
+            if (res.code.compare("222222") == 0)
+            {
+                scanRecv.CODE = "01";
+                scanRecv.MESSAGE = gt_trade_query_getmsg(res);
+            }
+            else if (res.code.compare("000000") != 0 && res.code.compare("222222") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = gt_trade_query_getmsg(res);
+            }
+            else
+            {
+                scanRecv.CODE = "00";
+                scanRecv.MESSAGE = "";
+            }
+        } catch (const std::exception& e)
+        {
+            LOG_ERROR("JSON 解析失败: %s\n数据: %s\n", e.what(), szXML);
+            return;
+        }
+        UpdateScanRecv(scanRecv);
+    }
+    else if (req.service.compare("unified.trade.refundquery") == 0)
+    {
+        trade_refundquery_response res;
+        try
+        {
+            scanRecv.SERVICE = SERVICE_REF;
+            xpack::xml::decode(szXML, res);
+            scanRecv.MERCHANT_ID = res.mch_id;
+            scanRecv.OUT_TRADE_NO = res.out_trade_no;
+            if (res.out_trade_no.length() == 0)
+            {
+                scanRecv.OUT_TRADE_NO = req.out_trade_no;
+            }
+            scanRecv.OUT_REFUND_NO = res.out_refund_no_0;
+            if (res.out_refund_no_0.length() == 0)
+            {
+                scanRecv.OUT_REFUND_NO = req.out_refund_no;
+            }
+            scanRecv.TRADE_TYPE = res.trade_type;
+            scanRecv.TRANSACTION_ID = res.transaction_id;
+            scanRecv.REFUND_ID = res.refund_id_0;
+            scanRecv.REFUND_FEE = res.refund_fee_0;
+            scanRecv.TIME_END = res.refund_time_0;
+
+            if (res.status.compare("0") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = trade_refundquery_getmsg(res);
+            }
+            else if (res.code.length() > 0 && res.code.compare("0") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = trade_refundquery_getmsg(res);
+            }
+            else if (res.result_code.compare("0") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = trade_refundquery_getmsg(res);
+            }
+            else if (res.refund_status_0.compare("SUCCESS") != 0 && res.refund_status_0.compare("PROCESSING") != 0)
+            {
+                scanRecv.CODE = "02";
+                scanRecv.MESSAGE = trade_refundquery_getmsg(res);
+            }
+            else
+            {
+                scanRecv.CODE = "00";
+            }
+        } catch (const std::exception& e)
+        {
+            LOG_ERROR("返回xml报文解析失败");
+            return;
+        }
+        UpdateScanRecv(scanRecv);
+    }
+    else
+    {
+    }
+}
+
+void gt(char* recvbuf, int recvLen, char* sendbuf, int* sendLen, trade_content_request& contentReq)
+{
+    LOG_INFO("GT请求处理开始");
     SCAN_SEND scanSend;
     ClearScanSend(scanSend);
-    trade_content_request contentReq;
-    int iRet;
+
+    try
+    {
+        if (contentReq.service.compare("unified.trade.micropay") == 0 || contentReq.service.compare("unified.trade.query") == 0)
+        {
+            scanSend.SERVICE = SERVICE_PAY;
+            scanSend.MERCHANT_ID = contentReq.agetId.c_str();
+            scanSend.OUT_TRADE_NO = contentReq.orderNo.c_str();
+        }
+
+        // 将新数据插入
+        InsertScanSend(scanSend);
+    }
+    catch (exception& e)
+    {
+        LOG_ERROR("请求解析失败");
+        return;
+    }
+
+    // 继续使用 curl 发送数据
     CURLcode res;
     CURL* curlHandle;
     char* pRes = NULL;
     struct curl_slist* pHeaders = NULL;
-    LOG_INFOSB(recvbuf, recvLen, "接收到请求报文[%d]", recvLen);
+    char gtUrl[100];
+    const char* method;
+
+    strcpy(gtUrl, globalCFG.gtUrl);
+    LOG_INFO("请求接口地址: %s", gtUrl);
+
+    char* processedJson = nullptr;
+    if (contentReq.service.compare("unified.trade.micropay") == 0)
+    {
+        method = "yyfsevr/order/scanByMerchant";
+        try {
+            // 先解析原始 JSON 到临时对象
+            gt_trade_micropay_request gtReq;
+            xpack::json::decode(recvbuf + 2, gtReq);
+            processedJson = strdup(xpack::json::encode(gtReq).c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("JSON 处理失败: %s\n", e.what());
+            LOG_ERROR("原始数据: %s\n", recvbuf + 2);
+            return;
+        }
+    }
+    else if (contentReq.service.compare("unified.trade.refund") == 0)
+    {
+        method = "yyfsevr/order/refund";
+        try {
+            // 先解析原始 JSON 到临时对象
+            gt_trade_refund_request gtReq;
+            xpack::json::decode(recvbuf + 2, gtReq);
+            processedJson = strdup(xpack::json::encode(gtReq).c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("JSON 处理失败: %s\n", e.what());
+            LOG_ERROR("原始数据: %s\n", recvbuf + 2);
+            return;
+        }
+    }
+    else if (contentReq.service.compare("unified.trade.query") == 0)
+    {
+        method = "yyfsevr/order/orderQuery";
+        try {
+            // 先解析原始 JSON 到临时对象
+            gt_trade_query_request gtReq;
+            xpack::json::decode(recvbuf + 2, gtReq);
+            processedJson = strdup(xpack::json::encode(gtReq).c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("JSON 处理失败: %s\n", e.what());
+            LOG_ERROR("原始数据: %s\n", recvbuf + 2);
+            return;
+        }
+    }
+    else if (contentReq.service.compare("unified.trade.close") == 0 || contentReq.service.compare("unified.micropay.reverse") == 0)
+    {
+        method = "yyfsevr/order/closePay";
+        try {
+            // 先解析原始 JSON 到临时对象
+            gt_trade_close_request gtReq;
+            xpack::json::decode(recvbuf + 2, gtReq);
+            processedJson = strdup(xpack::json::encode(gtReq).c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("JSON 处理失败: %s\n", e.what());
+            LOG_ERROR("原始数据: %s\n", recvbuf + 2);
+            return;
+        }
+    }
+    else {
+        LOG_ERROR("未知服务类型: %s\n", contentReq.service.c_str());
+        return;
+    }
+
+    LOG_INFO("请求接口方法: %s", method);
+
+    char fullUrl[200];
+    snprintf(fullUrl, sizeof(fullUrl), "%s%s", gtUrl, method);
+
+    LOG_INFO("请求接口地址: %s", fullUrl);
+
+    LOG_INFO("传递的 JSON 字符串: %s", processedJson);
+
+    curlHandle = curl_easy_init();
+    if (curlHandle)
+    {
+        curl_easy_setopt(curlHandle, CURLOPT_HEADER, 0L);
+        curl_easy_setopt(curlHandle, CURLOPT_URL, fullUrl);
+        curl_easy_setopt(curlHandle, CURLOPT_HTTPPOST, 1);
+        curl_easy_setopt(curlHandle, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_easy_setopt(curlHandle, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, processedJson);
+        curl_easy_setopt(curlHandle, CURLOPT_FORBID_REUSE, 1);
+        curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT, globalCFG.iRecvTimeout);
+        curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT, globalCFG.iConnTimeout);
+        curl_easy_setopt(curlHandle, CURLOPT_WRITEFUNCTION, http_response);
+        curl_easy_setopt(curlHandle, CURLOPT_WRITEDATA, &pRes);
+
+        pHeaders = curl_slist_append(pHeaders, "Content-Type: application/json"); // 修改为 JSON 请求头
+        curl_easy_setopt(curlHandle, CURLOPT_HTTPHEADER, pHeaders);
+
+        // 执行请求
+        res = curl_easy_perform(curlHandle);
+
+        // 处理响应
+        if (res == CURLE_OK && pRes != NULL)
+        {
+            LOG_INFO("LIBCURL通讯成功[%d][%s]", strlen(pRes + 4), pRes + 4);
+            sendbuf[0] = strlen(pRes + 4) / 256;
+            sendbuf[1] = strlen(pRes + 4) % 256;
+            memcpy(sendbuf + 2, pRes + 4, strlen(pRes + 4));
+            *sendLen = strlen(pRes + 4) + 2;
+
+            analyzeJSON(contentReq, pRes + 4);
+        }
+        else
+        {
+            LOG_ERROR("LIBCURL通讯失败 [%s] [%s]", globalCFG.url, curl_easy_strerror(res));
+        }
+    }
+    else
+    {
+        LOG_ERROR("LIBCURL初始化失败");
+    }
+
+    // 清理
+    if (pRes != NULL)
+    {
+        free(pRes);
+    }
+    if (pHeaders != NULL)
+    {
+        curl_slist_free_all(pHeaders);
+    }
+    if (curlHandle != NULL)
+    {
+        curl_easy_cleanup(curlHandle);
+    }
+
+    if (processedJson) free(processedJson);
+}
+
+// 原有的处理逻辑
+void wft(char* recvbuf, int recvLen, char* sendbuf, int* sendLen, trade_content_request& contentReq)
+{
+    SCAN_SEND scanSend;
+    ClearScanSend(scanSend);
 
     try
     {
-        xpack::xml::decode(recvbuf + 2, contentReq);
         if (contentReq.service.compare("unified.trade.micropay") == 0)
         {
             scanSend.SERVICE = SERVICE_PAY;
@@ -495,12 +880,20 @@ void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
             scanSend.MERCHANT_ID = contentReq.mch_id;
             scanSend.OUT_REFUND_NO = contentReq.out_refund_no;
         }
+
         InsertScanSend(scanSend);
-    } catch (exception& e)
-    {
-        LOG_ERROR("请求xml报文解析失败");
-        goto cleanUP;
     }
+    catch (exception& e)
+    {
+        LOG_ERROR("请求解析失败");
+        return;
+    }
+
+    // 继续原有的 curl 发送数据逻辑
+    CURLcode res;
+    CURL* curlHandle;
+    char* pRes = NULL;
+    struct curl_slist* pHeaders = NULL;
 
     curlHandle = curl_easy_init();
     if (curlHandle)
@@ -517,10 +910,11 @@ void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
         curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT, globalCFG.iConnTimeout);
         curl_easy_setopt(curlHandle, CURLOPT_WRITEFUNCTION, http_response);
         curl_easy_setopt(curlHandle, CURLOPT_WRITEDATA, &pRes);
-        
-        pHeaders = curl_slist_append(pHeaders, "Content-Type:application/xml");
+
+        pHeaders = curl_slist_append(pHeaders, "Content-Type:application/xml"); // 继续使用 XML
         curl_easy_setopt(curlHandle, CURLOPT_HTTPHEADER, pHeaders);
         res = curl_easy_perform(curlHandle);
+
         if (res == CURLE_OK && pRes != NULL)
         {
             LOG_INFO("LIBCURL通讯成功[%d][%s]", strlen(pRes + 4), pRes + 4);
@@ -529,35 +923,67 @@ void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
             memcpy(sendbuf + 2, pRes + 4, strlen(pRes + 4));
             *sendLen = strlen(pRes + 4) + 2;
 
-            analyzeXML(contentReq, pRes + 4);
+            analyzeXML(contentReq, pRes + 4);  // 使用 XML 分析
         }
         else
         {
-            LOG_ERROR("LIBCURl通讯失败 [%s] [%s]", globalCFG.url, curl_easy_strerror(res));
-
-            goto cleanUP;
+            LOG_ERROR("LIBCURL通讯失败 [%s] [%s]", globalCFG.url, curl_easy_strerror(res));
         }
     }
     else
     {
-        LOG_ERROR("LIBCURl申请失败");
-        goto cleanUP;
+        LOG_ERROR("LIBCURL初始化失败");
     }
-    
-cleanUP:
+
+    // 清理
     if (pRes != NULL)
     {
         free(pRes);
-        pRes = NULL;
     }
     if (pHeaders != NULL)
     {
         curl_slist_free_all(pHeaders);
     }
-    
     if (curlHandle != NULL)
     {
         curl_easy_cleanup(curlHandle);
     }
+}
+
+// 主逻辑方法
+void action(char* recvbuf, int recvLen, char* sendbuf, int* sendLen)
+{
+    trade_content_request contentReq;
+    int iRet;
+    CURLcode res;
+    
+    LOG_INFOSB(recvbuf, recvLen, "接收到请求报文[%d]", recvLen);
+
+    try
+    {
+        // 尝试 JSON 解析
+        try {
+            xpack::json::decode(recvbuf + 2, contentReq);
+        } catch (exception& e) {
+            // JSON 解析失败，记录错误并继续尝试 XML 解析
+            LOG_ERROR("JSON解析失败，尝试XML解析");
+            xpack::xml::decode(recvbuf + 2, contentReq);  // XML 解析
+        }
+    }
+    catch (exception& e)
+    {
+        // 如果 JSON 和 XML 解析都失败，记录错误
+        LOG_ERROR("请求解析失败，无法解析JSON和XML");
+        goto cleanUP;
+    }
+
+    if (contentReq.channel.empty()) {
+        wft(recvbuf, recvLen, sendbuf, sendLen, contentReq);
+    } else {
+        gt(recvbuf, recvLen, sendbuf, sendLen, contentReq);
+    }
+
+cleanUP:
     return;
 }
+

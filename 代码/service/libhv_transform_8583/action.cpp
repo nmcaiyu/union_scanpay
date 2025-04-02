@@ -310,20 +310,19 @@ bool processTransaction(const std::string& fullParam, const std::string& endpoin
                     // 更安全地提取特定参数部分
                     std::string specificParam;
                     size_t txntimPos = fullParam.find("|#|TXNTIM=");
+                    LOG_INFO("fullParam: %s", fullParam.c_str());
+
                     if (txntimPos != std::string::npos) {
-                        // 找到TXNTIM后的第一个|#|
+                        // 获取TXNTIM后面的部分
                         size_t nextParamPos = fullParam.find("|#|", txntimPos + 10);
                         if (nextParamPos != std::string::npos) {
-                            // 截取后面所有的特定参数
                             specificParam = fullParam.substr(nextParamPos + 3);
                         } else {
-                            // 如果没找到后面的|#|，可能是参数格式有问题
-                            LOG_ERROR("参数格式异常，无法提取特定参数");
-                            return false;
+                            // 如果找不到|#|，则取从TXNTIM后面到字符串末尾的部分
+                            specificParam = fullParam.substr(txntimPos + 10); // 从TXNTIM后面开始提取
                         }
                     } else {
-                        // 如果没找到TXNTIM，可能是参数格式有问题
-                        LOG_ERROR("参数格式异常，未找到TXNTIM字段");
+                        LOG_ERROR("未找到TXNTIM字段");
                         return false;
                     }
                     
